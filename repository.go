@@ -20,8 +20,12 @@ func (r Repository) String() string {
 
 // ParseRepository parses a Repository from a string in "owner/name" format.
 func ParseRepository(s string) (Repository, error) {
-	if i := strings.IndexByte(s, '/'); 1 <= i && i < len(s)-1 {
-		return Repository{Owner: s[:i], Name: s[i+1:]}, nil
+	i := strings.IndexByte(s, '/')
+	if i < 0 {
+		return Repository{}, fmt.Errorf("parse %q: missing slash", s)
 	}
-	return Repository{}, fmt.Errorf("invalid repository: %s", s)
+	if i == 0 || i == len(s)-1 {
+		return Repository{}, fmt.Errorf("parse %q: missing owner or name", s)
+	}
+	return Repository{Owner: s[:i], Name: s[i+1:]}, nil
 }

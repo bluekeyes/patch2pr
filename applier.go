@@ -231,7 +231,7 @@ func (a *Applier) CreateTree(ctx context.Context) (*github.Tree, error) {
 // details. Commit returns an error if there are no pending trees or tree
 // entries.
 func (a *Applier) Commit(ctx context.Context, header *gitdiff.PatchHeader) (*github.Commit, error) {
-	if !a.uncommitted || len(a.entries) == 0 {
+	if !a.uncommitted && len(a.entries) == 0 {
 		return nil, errors.New("no pending tree or tree entries")
 	}
 	if len(a.entries) > 0 {
