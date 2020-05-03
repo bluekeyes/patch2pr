@@ -1,8 +1,6 @@
 cloud.google.com/go v0.34.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
-github.com/bluekeyes/go-gitdiff v0.3.0 h1:j+SG1Fv3lI5/pxNxgo3hNbpDZb/DGzdEgL0wxVltHRk=
-github.com/bluekeyes/go-gitdiff v0.3.0/go.mod h1:QpfYYO1E0fTVHVZAZKiRjtSGY9823iCdvGXBcEzHGbM=
-github.com/bluekeyes/go-gitdiff v0.3.1-0.20200427030020-b5ae0bd4434a h1:KBFByoVmroMNs4rvLLtrp8Ks1Srnm1vp3jQXXFIINT0=
-github.com/bluekeyes/go-gitdiff v0.3.1-0.20200427030020-b5ae0bd4434a/go.mod h1:QpfYYO1E0fTVHVZAZKiRjtSGY9823iCdvGXBcEzHGbM=
+github.com/bluekeyes/go-gitdiff v0.3.1-0.20200503203908-4fa98017427b h1:57zyTeTzjnctI1+DmDtH8DE3MWUDycbpHHmDBfEaPa4=
+github.com/bluekeyes/go-gitdiff v0.3.1-0.20200503203908-4fa98017427b/go.mod h1:QpfYYO1E0fTVHVZAZKiRjtSGY9823iCdvGXBcEzHGbM=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.2 h1:6nsPYzhq5kReh6QImI3k5qWzO4PEbvbIW2cwSfR/6xs=
 github.com/golang/protobuf v1.3.2/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=

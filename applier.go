@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strconv"
 	"strings"
 
@@ -135,16 +136,8 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) error {
 		return fmt.Errorf("get blob content failed: %w", err)
 	}
 
-	var b bytes.Buffer
-	if err := gitdiff.Apply(&b, bytes.NewReader(data), f); err != nil {
-		// TODO(bkeyes): does this wrapping need more/less context?
-		return fmt.Errorf("apply failed: %w", err)
-	}
-	if b.Len() != 0 {
-		// TODO(bkeyes): is this necessary if files are validated? Maybe in the
-		// case of a deletion where content was added to the end of the file?
-		// I'm not sure how gitdiff.Apply handles that case...
-		return errors.New("deleted file had content after apply")
+	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
+		return err
 	}
 
 	a.entries = append(a.entries, &github.TreeEntry{
@@ -340,8 +333,7 @@ func base64Apply(data []byte, f *gitdiff.File) (string, error) {
 
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
 	if err := gitdiff.Apply(enc, bytes.NewReader(data), f); err != nil {
-		// TODO(bkeyes): does this wrapping need more/less context?
-		return "", fmt.Errorf("apply failed: %w", err)
+		return "", err
 	}
 	if err := enc.Close(); err != nil {
 		return "", fmt.Errorf("base64 encoding failed: %w", err)
