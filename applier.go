@@ -138,6 +138,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) error {
 
 	a.entries = append(a.entries, &github.TreeEntry{
 		Path: github.String(f.OldName),
+		Mode: entry.Mode,
 	})
 	return nil
 }
@@ -174,6 +175,7 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) error {
 	if f.OldName != f.NewName {
 		a.entries = append(a.entries, &github.TreeEntry{
 			Path: github.String(f.OldName),
+			Mode: entry.Mode,
 		})
 	}
 
