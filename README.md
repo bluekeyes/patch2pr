@@ -8,10 +8,10 @@ As a command line tool, it's mostly a curiosity and test for the library, but
 might have some use for exceptionally large repositories or in environments
 where cloning is not feasible.
 
-As a library, however, it allows for tools that make automated code changes
-without giving every part of system write access or requiring extra logic for
-managing clones. One part of the system can generate a patch and send it to
-another part that uses this library to apply it and create a pull request.
+As a library, however, it enables tools to make automated code changes without
+giving every part of system write access or requiring extra logic for managing
+clones. One part of the system can generate a patch and send it to another part
+that uses this library to apply it and create a pull request.
 
 ## Usage: CLI
 
@@ -30,8 +30,8 @@ The other required arguments are:
 
 For example:
 
-    export GITHUB_TOKEN="token"
-    patch2pr -repository bluekeyes/patch2pr /path/to/file.patch
+    $ export GITHUB_TOKEN="token"
+    $ patch2pr -repository bluekeyes/patch2pr /path/to/file.patch
 
 See the CLI help (`-h` or `-help`) or below for full details.
 
@@ -110,6 +110,25 @@ from that package in the API.
 
 [documentation]: https://pkg.go.dev/github.com/bluekeyes/patch2pr?tab=doc
 [google/go-github]: https://github.com/google/go-github
+
+## Stability
+
+Experimental. The interface for both the CLI and the library may change. While
+the underlying patch library ([bluekeyes/go-gitdiff][]) has good test coverage,
+it hasn't been used extensively against real-world patches.
+
+[bluekeyes/go-gitdiff]: https://github.com/bluekeyes/go-gitdiff
+
+## Contributing
+
+Contributions are welcome. If reporting an issue with applying a patch, please
+include the patch file and the base commit or file content if possible. A link
+to a public repository is most helpful.
+
+At this time, I don't intend to support services other than GitHub. If you'd
+like support for another service, please file an issue with a link to the
+relevant API documentation so I can estimate the work involved in adding the
+necessary abstractions.
 
 ## License
 
