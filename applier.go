@@ -20,10 +20,9 @@ var DefaultCommitMessage = "Apply patch with patch2pr"
 
 // Applier applies patches to create trees and commits in a repository.
 type Applier struct {
-	client     *github.Client
-	owner      string
-	repo       string
-	eagerBlobs bool
+	client *github.Client
+	owner  string
+	repo   string
 
 	commit      *github.Commit
 	tree        string
@@ -45,11 +44,8 @@ func NewApplier(client *github.Client, repo Repository, c *github.Commit) *Appli
 }
 
 // Apply applies the changes in a file, adds the result to the list of pending
-// tree entries, and returns the entry.
-//
-// If EagerBlobs is true, Apply creates a blob for any content and returns an
-// entry with a blob reference. Otherwise, the repository is not modified and
-// the entry contains the new content.
+// tree entries, and returns the entry. If the application succeeds, Apply
+// creates a blob in the repository with the modified content.
 func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	// TODO(bkeyes): validate file to make sure fields are consistent
 	// maybe two modes: validate and fix, where fix tries to set
@@ -82,7 +78,7 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 
 	entry := a.entries[len(a.entries)-1]
 
-	if a.eagerBlobs && entry.Content != nil {
+	if entry.Content != nil {
 		blob, _, err := a.client.Git.CreateBlob(ctx, a.owner, a.repo, &github.Blob{
 			Content:  entry.Content,
 			Encoding: github.String("base64"),
@@ -187,14 +183,6 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) error {
 	a.entries = append(a.entries, newEntry)
 
 	return nil
-}
-
-// SetEagerBlobs enables or disables eager blob creation in the applier. When
-// enabled, blobs are created in the repository as soon as possible. When
-// disabled, blobs are created only when creating a tree. This reduces the
-// number of API requests but uses more memory.
-func (a *Applier) SetEagerBlobs(on bool) {
-	a.eagerBlobs = on
 }
 
 // Entries returns the list of pending tree entries.
