@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v31/github"
+	"github.com/google/go-github/v32/github"
 )
 
 // Reference is a named reference in a repository.
@@ -34,21 +34,17 @@ func NewReference(client *github.Client, repo Repository, ref string) *Reference
 // the reference exists, Set updates it even if the update is not a
 // fast-forward.
 func (r *Reference) Set(ctx context.Context, sha string, force bool) error {
-	// TODO(bkeyes): update this after the new endpoints merge!
-	// https://github.com/google/go-github/pull/1513
-
-	// Test for existence because both update and create return 422 responses
-	// if the the ref is missing or exists, respectively. The same code is also
-	// used for other errors like passing a bad SHA, so our only other option
-	// is to parse the string message, which is fragile.
-
+	// Test for existence because update and create return 422 responses if the
+	// the ref is missing or exists, respectively. The same code is also used
+	// for other errors like passing a bad SHA, so our only other option is to
+	// parse the string message, which is fragile.
 	var exists bool
-	if refs, _, err := r.client.Git.GetRefs(ctx, r.owner, r.repo, r.ref); err != nil {
+	if _, _, err := r.client.Git.GetRef(ctx, r.owner, r.repo, r.ref); err != nil {
 		if rerr, ok := err.(*github.ErrorResponse); !ok || rerr.Response.StatusCode != 404 {
 			return fmt.Errorf("get ref failed: %w", err)
 		}
 	} else {
-		exists = len(refs) == 1 && refs[0].GetRef() != r.ref
+		exists = true
 	}
 
 	if exists {
