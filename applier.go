@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/google/go-github/v32/github"
@@ -345,8 +346,8 @@ func getMode(f *gitdiff.File, existing *github.TreeEntry) string {
 	return "100644"
 }
 
-func makeCommitAuthor(id *gitdiff.PatchIdentity, d *gitdiff.PatchDate) *github.CommitAuthor {
-	if id == nil && d == nil {
+func makeCommitAuthor(id *gitdiff.PatchIdentity, d time.Time) *github.CommitAuthor {
+	if id == nil && d.IsZero() {
 		return nil
 	}
 
@@ -359,9 +360,8 @@ func makeCommitAuthor(id *gitdiff.PatchIdentity, d *gitdiff.PatchDate) *github.C
 			a.Email = github.String(id.Email)
 		}
 	}
-	if d != nil && d.IsParsed() {
-		t := d.Parsed
-		a.Date = &t
+	if !d.IsZero() {
+		a.Date = &d
 	}
 	return a
 }

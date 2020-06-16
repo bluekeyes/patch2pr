@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr"
@@ -273,13 +274,13 @@ func fillHeader(h *gitdiff.PatchHeader, patchFile, message string) *gitdiff.Patc
 	if envAuthor := idFromEnv("AUTHOR"); envAuthor != nil {
 		h.Author = envAuthor
 	}
-	if envAuthorDate := dateFromEnv("AUHTOR"); envAuthorDate != nil {
+	if envAuthorDate := dateFromEnv("AUHTOR"); !envAuthorDate.IsZero() {
 		h.AuthorDate = envAuthorDate
 	}
 	if envCommitter := idFromEnv("COMMITTER"); envCommitter != nil {
 		h.Committer = envCommitter
 	}
-	if envCommitterDate := dateFromEnv("COMMITTER"); envCommitterDate != nil {
+	if envCommitterDate := dateFromEnv("COMMITTER"); !envCommitterDate.IsZero() {
 		h.CommitterDate = envCommitterDate
 	}
 
@@ -295,11 +296,11 @@ func idFromEnv(idType string) *gitdiff.PatchIdentity {
 	return nil
 }
 
-func dateFromEnv(dateType string) *gitdiff.PatchDate {
-	if d := gitdiff.ParsePatchDate(os.Getenv(fmt.Sprintf("GIT_%s_DATE", dateType))); d.IsParsed() {
-		return &d
+func dateFromEnv(dateType string) time.Time {
+	if d, err := gitdiff.ParsePatchDate(os.Getenv(fmt.Sprintf("GIT_%s_DATE", dateType))); err == nil {
+		return d
 	}
-	return nil
+	return time.Time{}
 }
 
 func helpText() string {
