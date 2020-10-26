@@ -1,4 +1,5 @@
 # patch2pr
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/bluekeyes/patch2pr)](https://pkg.go.dev/github.com/bluekeyes/patch2pr)
 
 Create GitHub pull requests from Git patches without cloning the repository.
 
