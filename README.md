@@ -114,9 +114,13 @@ from that package in the API.
 
 ## Stability
 
-Experimental. The interface for both the CLI and the library may change. While
-the underlying patch library ([bluekeyes/go-gitdiff][]) has good test coverage,
-it hasn't been used extensively against real-world patches.
+Beta. The library is used in a production application that applies thousands of
+patches every day, but the interface for both the CLI and the library may
+change.
+
+While the underlying patch library ([bluekeyes/go-gitdiff][]) has good test
+coverage and real-world usage, the space of all possible patches is large, so
+there are likely undiscovered bugs.
 
 [bluekeyes/go-gitdiff]: https://github.com/bluekeyes/go-gitdiff
 
