@@ -215,13 +215,20 @@ func (a *Applier) CreateTree(ctx context.Context) (*github.Tree, error) {
 	return tree, nil
 }
 
-// Commit commits the latest tree, optionally using the details in header. If
-// there are pending tree entries, it calls CreateTree before creating the
-// commit. If header is nil or missing fields, Commit uses a default message,
-// the current time, and the authenticated user as needed for the commit
-// details. Commit returns an error if there are no pending trees or tree
-// entries.
-func (a *Applier) Commit(ctx context.Context, header *gitdiff.PatchHeader) (*github.Commit, error) {
+// Commit commits the latest tree, optionally using the details in tmpl and
+// header. If there are pending tree entries, it calls CreateTree before
+// creating the commit. It returns an error if there are no pending trees or
+// tree entries.
+//
+// If tmpl is not nil, Commit uses it as a template for the new commit,
+// overwriting fields as needed. If header is not nil, Commit uses it to set
+// the message, author, and committer for the new commit. Values in header
+// overwrite those in tmpl.
+//
+// If both tmpl and header are nil or missing fields, Commit uses a default
+// message, the current time, and the authenticated user as needed for the
+// commit details.
+func (a *Applier) Commit(ctx context.Context, tmpl *github.Commit, header *gitdiff.PatchHeader) (*github.Commit, error) {
 	if !a.uncommitted && len(a.entries) == 0 {
 		return nil, errors.New("no pending tree or tree entries")
 	}
@@ -231,13 +238,16 @@ func (a *Applier) Commit(ctx context.Context, header *gitdiff.PatchHeader) (*git
 		}
 	}
 
-	c := &github.Commit{
-		Tree: &github.Tree{
-			SHA: github.String(a.tree),
-		},
-		Parents: []*github.Commit{
-			a.commit,
-		},
+	var c github.Commit
+	if tmpl != nil {
+		c = *tmpl
+	}
+
+	c.Tree = &github.Tree{
+		SHA: github.String(a.tree),
+	}
+	c.Parents = []*github.Commit{
+		a.commit,
 	}
 
 	if header != nil {
@@ -249,7 +259,7 @@ func (a *Applier) Commit(ctx context.Context, header *gitdiff.PatchHeader) (*git
 		c.Message = github.String("Apply patch with patch2pr")
 	}
 
-	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, c)
+	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, &c)
 	if err != nil {
 		return nil, err
 	}

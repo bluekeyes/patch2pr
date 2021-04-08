@@ -188,7 +188,7 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		}
 	}
 
-	newCommit, err := applier.Commit(ctx, fillHeader(header, patchFile, opts.Message))
+	newCommit, err := applier.Commit(ctx, nil, fillHeader(header, patchFile, opts.Message))
 	if err != nil {
 		return nil, fmt.Errorf("commit failed: %w", err)
 	}
