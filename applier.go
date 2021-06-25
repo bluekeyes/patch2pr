@@ -28,7 +28,7 @@ type Applier struct {
 	commit      *github.Commit
 	tree        string
 	treeCache   map[string]*github.Tree
-	entries     []*github.TreeEntry
+	entries     map[string]*github.TreeEntry
 	uncommitted bool
 }
 
@@ -55,29 +55,19 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 	// in particular, we need IsNew, IsDelete, maybe IsCopy and IsRename to
 	// agree with the fragments and NewName/OldName
 
-	// Because of the tree cache, files must be part of a remote (i.e. created)
-	// tree before they are modifiable. This could be fixed by refactoring the
-	// apply logic but doesn't seem like an onerous restriction.
-	for _, e := range a.entries {
-		if e.GetPath() == f.NewName {
-			return nil, errors.New("cannot apply with pending changes to file")
-		}
-	}
-
+	var entry *github.TreeEntry
 	var err error
 	switch {
 	case f.IsNew:
-		err = a.applyCreate(ctx, f)
+		entry, err = a.applyCreate(ctx, f)
 	case f.IsDelete:
-		err = a.applyDelete(ctx, f)
+		entry, err = a.applyDelete(ctx, f)
 	default:
-		err = a.applyModify(ctx, f)
+		entry, err = a.applyModify(ctx, f)
 	}
 	if err != nil {
 		return nil, err
 	}
-
-	entry := a.entries[len(a.entries)-1]
 
 	if entry.Content != nil {
 		blob, _, err := a.client.Git.CreateBlob(ctx, a.owner, a.repo, &github.Blob{
@@ -94,67 +84,74 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 	return entry, nil
 }
 
-func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) error {
+func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	_, exists, err := a.getEntry(ctx, f.NewName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if exists {
-		return errors.New("existing entry for new file")
+		return nil, errors.New("existing entry for new file")
 	}
 
 	c, err := base64Apply(nil, f)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	a.entries = append(a.entries, &github.TreeEntry{
-		Path:    github.String(f.NewName),
+	path := f.NewName
+	newEntry := &github.TreeEntry{
+		Path:    &path,
 		Mode:    github.String(getMode(f, nil)),
 		Type:    github.String("blob"),
 		Content: &c,
-	})
-	return nil
+	}
+	a.entries[path] = newEntry
+
+	return newEntry, nil
 }
 
-func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) error {
+func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	entry, exists, err := a.getEntry(ctx, f.OldName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !exists {
 		// because the rest of application is strict, return an error if the
 		// file was already deleted, since it indicates a conflict of some kind
-		return errors.New("missing entry for deleted file")
+		return nil, errors.New("missing entry for deleted file")
 	}
 
 	data, _, err := a.client.Git.GetBlobRaw(ctx, a.owner, a.repo, entry.GetSHA())
 	if err != nil {
-		return fmt.Errorf("get blob content failed: %w", err)
+		return nil, fmt.Errorf("get blob content failed: %w", err)
 	}
 
 	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
-		return err
+		return nil, err
 	}
 
-	a.entries = append(a.entries, &github.TreeEntry{
-		Path: github.String(f.OldName),
+	path := f.OldName
+	newEntry := &github.TreeEntry{
+		Path: &path,
 		Mode: entry.Mode,
-	})
-	return nil
+	}
+	a.entries[path] = newEntry
+
+	return newEntry, nil
 }
 
-func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) error {
+func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	entry, exists, err := a.getEntry(ctx, f.OldName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !exists {
-		return errors.New("no entry for modified file")
+		return nil, errors.New("no entry for modified file")
 	}
 
+	path := f.NewName
 	newEntry := &github.TreeEntry{
-		Path: github.String(f.NewName),
+		Path: &path,
 		Mode: github.String(getMode(f, entry)),
 		Type: github.String("blob"),
 	}
@@ -162,35 +159,40 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) error {
 	if len(f.TextFragments) > 0 || f.BinaryFragment != nil {
 		data, _, err := a.client.Git.GetBlobRaw(ctx, a.owner, a.repo, entry.GetSHA())
 		if err != nil {
-			return fmt.Errorf("get blob content failed: %w", err)
+			return nil, fmt.Errorf("get blob content failed: %w", err)
 		}
 
 		c, err := base64Apply(data, f)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		newEntry.Content = &c
 	}
 
 	// delete the old file if it was renamed
 	if f.OldName != f.NewName {
-		a.entries = append(a.entries, &github.TreeEntry{
-			Path: github.String(f.OldName),
+		path := f.OldName
+		a.entries[path] = &github.TreeEntry{
+			Path: &path,
 			Mode: entry.Mode,
-		})
+		}
 	}
 
 	if newEntry.Content == nil {
 		newEntry.SHA = entry.SHA
 	}
-	a.entries = append(a.entries, newEntry)
+	a.entries[path] = newEntry
 
-	return nil
+	return newEntry, nil
 }
 
 // Entries returns the list of pending tree entries.
 func (a *Applier) Entries() []*github.TreeEntry {
-	return a.entries
+	entries := make([]*github.TreeEntry, 0, len(a.entries))
+	for _, e := range a.entries {
+		entries = append(entries, e)
+	}
+	return entries
 }
 
 // CreateTree creates a tree from the pending tree entries and clears the entry
@@ -201,16 +203,16 @@ func (a *Applier) CreateTree(ctx context.Context) (*github.Tree, error) {
 		return nil, errors.New("no pending tree entries")
 	}
 
-	tree, _, err := a.client.Git.CreateTree(ctx, a.owner, a.repo, a.tree, a.entries)
+	tree, _, err := a.client.Git.CreateTree(ctx, a.owner, a.repo, a.tree, a.Entries())
 	if err != nil {
 		return nil, err
 	}
 
 	// Clear the tree cache here because we only cache trees that lead to file
 	// modifications, and any change creates a new (i.e. uncached) tree SHA
-	a.treeCache = make(map[string]*github.Tree)
 	a.tree = tree.GetSHA()
-	a.entries = nil
+	a.treeCache = make(map[string]*github.Tree)
+	a.entries = make(map[string]*github.TreeEntry)
 	a.uncommitted = true
 	return tree, nil
 }
@@ -276,13 +278,18 @@ func (a *Applier) Reset(c *github.Commit) {
 	a.commit = c
 	a.tree = c.GetTree().GetSHA()
 	a.treeCache = make(map[string]*github.Tree)
-	a.entries = nil
+	a.entries = make(map[string]*github.TreeEntry)
 	a.uncommitted = false
 }
 
-// getEntry returns the tree entry for path in the base tree. Returns nil and
-// false if no entry exists for path.
+// getEntry returns the tree entry for a path. If the path has a pending
+// change, return the entry representing that change, otherwise return an entry
+// from the base tree. Returns nil and false if no entry exists for path.
 func (a *Applier) getEntry(ctx context.Context, path string) (*github.TreeEntry, bool, error) {
+	if entry, ok := a.entries[path]; ok {
+		return entry, true, nil
+	}
+
 	parts := strings.Split(path, "/")
 	dir, name := parts[:len(parts)-1], parts[len(parts)-1]
 
