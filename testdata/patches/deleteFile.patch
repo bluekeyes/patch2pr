@@ -1,0 +1,19 @@
+diff --git a/backend/memory/memory.go b/backend/memory/memory.go
+deleted file mode 100644
+index 7f621e4..0000000
+--- a/backend/memory/memory.go
++++ /dev/null
+@@ -1,13 +0,0 @@
+-package memory
+-
+-type KVStore struct {
+-	data map[string]interface{}
+-}
+-
+-func (kv *KVStore) Get(key string) interface{} {
+-	return kv.data[key]
+-}
+-
+-func (kv *KVStore) Put(key string, value interface{}) {
+-	kv.data[key] = value
+-}
