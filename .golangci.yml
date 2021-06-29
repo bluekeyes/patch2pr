@@ -1,0 +1,26 @@
+run:
+  tests: false
+
+linters:
+  disable-all: true
+  enable:
+    - deadcode
+    - errcheck
+    - gofmt
+    - goimports
+    - golint
+    - govet
+    - ineffassign
+    - typecheck
+    - unconvert
+    - varcheck
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: cmd/patch2pr/
+      text: "should have( a package)? comment"
+
+linter-settings:
+  goimports:
+    local-prefixes: github.com/bluekeyes/patch2pr
