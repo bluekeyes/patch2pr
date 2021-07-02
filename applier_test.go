@@ -131,13 +131,22 @@ func assertPatchResult(t *testing.T, tctx *TestContext, name string, c *github.C
 			return err
 		}
 
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
+		var content []byte
+		if info.Mode()&fs.ModeSymlink > 0 {
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			content = []byte(target)
+		} else {
+			content, err = os.ReadFile(path)
+			if err != nil {
+				return err
+			}
 		}
 
 		expected[relpath] = treeFile{
-			Mode:    fmt.Sprintf("100%o", info.Mode()),
+			Mode:    getGitMode(info),
 			Content: content,
 		}
 
@@ -200,6 +209,13 @@ func entriesToMap(entries []*github.TreeEntry) map[string]treeFile {
 	return m
 }
 
+func getGitMode(info fs.FileInfo) string {
+	if info.Mode()&fs.ModeSymlink > 0 {
+		return "120000"
+	}
+	return fmt.Sprintf("100%o", info.Mode())
+}
+
 func prepareTestContext(t *testing.T) *TestContext {
 	id := strconv.FormatInt(time.Now().UnixNano()/1000000, 10)
 
@@ -257,7 +273,7 @@ func createBranch(t *testing.T, tctx *TestContext) {
 		entry := github.TreeEntry{
 			Path: &treePath,
 			Type: github.String("blob"),
-			Mode: github.String(fmt.Sprintf("100%o", info.Mode())),
+			Mode: github.String(getGitMode(info)),
 		}
 
 		if strings.HasSuffix(d.Name(), ".bin") {

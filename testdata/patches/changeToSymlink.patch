@@ -1,0 +1,24 @@
+diff --git a/script.sh b/script.sh
+deleted file mode 100755
+index b630d5e..0000000
+--- a/script.sh
++++ /dev/null
+@@ -1,2 +0,0 @@
+-#!/bin/bash
+-echo "This file is executable"
+diff --git a/script.sh b/script.sh
+new file mode 120000
+index 0000000..7b2f763
+--- /dev/null
++++ b/script.sh
+@@ -0,0 +1 @@
++scripts/script.sh
+\ No newline at end of file
+diff --git a/scripts/script.sh b/scripts/script.sh
+new file mode 100755
+index 0000000..b630d5e
+--- /dev/null
++++ b/scripts/script.sh
+@@ -0,0 +1,2 @@
++#!/bin/bash
++echo "This file is executable"

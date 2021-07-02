@@ -287,6 +287,10 @@ func (a *Applier) Reset(c *github.Commit) {
 // from the base tree. Returns nil and false if no entry exists for path.
 func (a *Applier) getEntry(ctx context.Context, path string) (*github.TreeEntry, bool, error) {
 	if entry, ok := a.entries[path]; ok {
+		if entry.SHA == nil && entry.Content == nil {
+			// The existing entry is a deletion, so pretend it doesn't exist
+			return nil, false, nil
+		}
 		return entry, true, nil
 	}
 
