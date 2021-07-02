@@ -26,4 +26,4 @@ jobs:
         run: go test -v ./...
         env:
           PATCH2PR_TEST_REPO: bluekeyes/patch2pr
-          PATCH2PR_TEST_GITHUB_TOKEN: ${{ github.repository_owner == "bluekeyes" && secrets.GITHUB_TOKEN || "" }}
+          PATCH2PR_TEST_GITHUB_TOKEN: ${{ github.repository_owner == 'bluekeyes' && secrets.GITHUB_TOKEN || '' }}
