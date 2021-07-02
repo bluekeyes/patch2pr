@@ -1,0 +1,46 @@
+diff --git a/README.md b/README.md
+index 3eaf470..bf93cb5 100644
+--- a/README.md
++++ b/README.md
+@@ -2,3 +2,5 @@
+ 
+ This directory contains arbitrary files used to construct a base branch against
+ which tests apply patches.
++
++This is a line from a patch.
+diff --git a/main/bits.go b/main/bits.go
+index 021e5f4..97ce630 100644
+--- a/main/bits.go
++++ b/main/bits.go
+@@ -1,18 +1,12 @@
+ package main
+ 
+ func Twist(v uint64) uint64 {
+-	x := 1823 * v
++	x := 1821 * v
+ 	y := v | (v << 16)
+ 	z := x ^ y
+ 	return z & ((v >> 32) | (v << 32))
+ }
+ 
+-func Fiddle(v uint64) uint64 {
+-	v |= 0x80
+-	v |= 0x8000
+-	return (v&0xFFFF)<<48 | v&0xFFFFFFFF0000 | (v>>48)&0xFFFF
+-}
+-
+ func Collide(a, b uint64) uint64 {
+ 	v := a&(((1<<32)-1)<<32) | (b&(1<<32) - 1)
+ 	v ^= b&(((1<<32)-1)<<32) | (a&(1<<32) - 1)
+diff --git a/main/main.go b/main/main.go
+index 22a9894..15ec104 100644
+--- a/main/main.go
++++ b/main/main.go
+@@ -12,7 +12,6 @@ func init() {
+ 
+ func main() {
+ 	x := rand.Uint64()
+-	x = Fiddle(x)
+ 	x = Twist(x)
+ 
+ 	y := rand.Uint64()

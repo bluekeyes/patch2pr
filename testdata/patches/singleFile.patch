@@ -1,0 +1,10 @@
+diff --git a/README.md b/README.md
+index 3eaf470..eeb2864 100644
+--- a/README.md
++++ b/README.md
+@@ -2,3 +2,5 @@
+ 
+ This directory contains arbitrary files used to construct a base branch against
+ which tests apply patches.
++
++A patch added this line.

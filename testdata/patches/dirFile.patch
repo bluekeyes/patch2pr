@@ -1,0 +1,15 @@
+diff --git a/backend/memory/memory.go b/backend/memory/memory.go
+index 7f621e4..6e936d5 100644
+--- a/backend/memory/memory.go
++++ b/backend/memory/memory.go
+@@ -4,6 +4,10 @@ type KVStore struct {
+ 	data map[string]interface{}
+ }
+ 
++func NewKVStore() *KVStore {
++	return &KVStore{data: make(map[string]interface{})}
++}
++
+ func (kv *KVStore) Get(key string) interface{} {
+ 	return kv.data[key]
+ }

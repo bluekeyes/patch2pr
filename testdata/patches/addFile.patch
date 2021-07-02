@@ -1,0 +1,12 @@
+diff --git a/backend/backend.go b/backend/backend.go
+new file mode 100644
+index 0000000..ae621ed
+--- /dev/null
++++ b/backend/backend.go
+@@ -0,0 +1,6 @@
++package backend
++
++type Backend interface {
++	Get(string) interface{}
++	Put(string, interface{})
++}
