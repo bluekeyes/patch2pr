@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v36/github"
+	"github.com/google/go-github/v37/github"
 )
 
 // Reference is a named reference in a repository.
