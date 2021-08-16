@@ -4,6 +4,6 @@ go 1.14
 
 require (
 	github.com/bluekeyes/go-gitdiff v0.5.2
-	github.com/google/go-github/v37 v37.0.0
+	github.com/google/go-github/v38 v38.1.0
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 )
