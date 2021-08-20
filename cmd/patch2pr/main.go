@@ -183,8 +183,11 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 	applier := patch2pr.NewApplier(client, repo, commit)
 	for _, file := range files {
 		if _, err := applier.Apply(ctx, file); err != nil {
-			// TODO(bkeyes): NewName is probably /dev/null for deletes...
-			return nil, fmt.Errorf("apply failed: %s: %w", file.NewName, err)
+			name := file.NewName
+			if name == "" {
+				name = file.OldName
+			}
+			return nil, fmt.Errorf("apply failed: %s: %w", name, err)
 		}
 	}
 
