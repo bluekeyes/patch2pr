@@ -23,7 +23,7 @@ import (
 //  * Does not accept patches that use file modes other than the default
 //  * Does not create intermediate blobs and trees
 //  * Uses more memory while applying patches with multiple files
-//  * Always updates a branch to reference the new commit
+//  * Updates a branch (which must exist) to reference the new commit
 //  * Creates signed commits
 //
 // Using a GraphQLApplier is usually recommended, unless you need the control
@@ -77,6 +77,7 @@ func (a *GraphQLApplier) Apply(ctx context.Context, f *gitdiff.File) error {
 	if !isStdMode(f.NewMode) {
 		return fmt.Errorf("cannot apply file with unsupported mode: %o", f.NewMode)
 	}
+	// TODO(bkeyes): reject renames of files with non-standard modes
 	// TODO(bkeyes): what does GitHub do if we modify the content of an existing file with a non-standard mode?
 
 	switch {
@@ -99,7 +100,7 @@ func (a *GraphQLApplier) applyCreate(ctx context.Context, f *gitdiff.File) error
 	}
 
 	var b bytes.Buffer
-	if err := gitdiff.Apply(&b, nil, f); err != nil {
+	if err := gitdiff.Apply(&b, bytes.NewReader(nil), f); err != nil {
 		return err
 	}
 
@@ -163,7 +164,8 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 	var q struct {
 		Repository struct {
 			Object struct {
-				Blob *struct {
+				Blob struct {
+					Type        string `graphql:"__typename"` // Use to check existence
 					CommitURL   githubv4.URI
 					IsTruncated bool
 					Text        *string
@@ -172,9 +174,9 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 	vars := map[string]interface{}{
-		"owner": a.owner,
-		"name":  a.repo,
-		"expr":  fmt.Sprintf("%s:%s", a.commit, path),
+		"owner": githubv4.String(a.owner),
+		"name":  githubv4.String(a.repo),
+		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, path)),
 	}
 
 	if err := a.v4client.Query(ctx, &q, vars); err != nil {
@@ -182,7 +184,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 	}
 
 	blob := q.Repository.Object.Blob
-	if blob == nil {
+	if blob.Type == "" {
 		return nil, false, nil
 	}
 	if !blob.IsTruncated && blob.Text != nil {
@@ -213,7 +215,9 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 }
 
 // Commit creates a commit with all pending file changes. It updates the branch
-// ref to point at the new commit and returns the OID (SHA) of the commit.
+// ref to point at the new commit and returns the OID (SHA) of the commit. The
+// branch must already exist and reference at the current base commit of the
+// GraphQLApplier.
 //
 // If header is not nil, Apply uses it to set the commit message. It ignores
 // other fields set in header. In particular, the commit timestamp, author, and
@@ -228,7 +232,6 @@ func (a *GraphQLApplier) Commit(ctx context.Context, ref string, header *gitdiff
 	}
 
 	input := a.makeInput(ref, header)
-
 	if err := a.v4client.Mutate(ctx, &m, input, nil); err != nil {
 		return "", fmt.Errorf("commit failed: %w", err)
 	}
@@ -240,9 +243,9 @@ func (a *GraphQLApplier) Commit(ctx context.Context, ref string, header *gitdiff
 	return oid, nil
 }
 
-func (a *GraphQLApplier) makeInput(ref string, header *gitdiff.PatchHeader) createCommitOnBranchInput {
-	input := createCommitOnBranchInput{
-		CommittableBranch: committableBranch{
+func (a *GraphQLApplier) makeInput(ref string, header *gitdiff.PatchHeader) CreateCommitOnBranchInput {
+	input := CreateCommitOnBranchInput{
+		Branch: committableBranch{
 			BranchName:              ref,
 			RepositoryNameWithOwner: fmt.Sprintf("%s/%s", a.owner, a.repo),
 		},
@@ -287,11 +290,15 @@ func isModeChange(m1, m2 os.FileMode) bool {
 	return m1 != 0 && m2 != 0 && m1 == m2
 }
 
-type createCommitOnBranchInput struct {
-	CommittableBranch committableBranch    `json:"committableBranch"`
-	ExpectedHeadOID   githubv4.GitObjectID `json:"expectedHeadOid"`
-	FileChanges       fileChanges          `json:"fileChanges"`
-	Message           commitMessage        `json:"message"`
+// TODO(bkeyes): this needs to be public to match the type name in the schema,
+// since shurcooL/graphql uses the Go type name to write the GraphQL type when
+// generating the schema. Usually these exist in the githubv4 library, but this
+// one hasn't been added yet.
+type CreateCommitOnBranchInput struct {
+	Branch          committableBranch    `json:"branch"`
+	ExpectedHeadOID githubv4.GitObjectID `json:"expectedHeadOid"`
+	FileChanges     fileChanges          `json:"fileChanges"`
+	Message         commitMessage        `json:"message"`
 }
 
 type committableBranch struct {
@@ -300,8 +307,8 @@ type committableBranch struct {
 }
 
 type fileChanges struct {
-	Additions []fileAddition `json:"additions"`
-	Deletions []fileDeletion `json:"deletions"`
+	Additions []fileAddition `json:"additions,omitempty"`
+	Deletions []fileDeletion `json:"deletions,omitempty"`
 }
 
 type fileAddition struct {
