@@ -14,11 +14,9 @@ import (
 var GraphQLSkipPatches = map[string]bool{
 	"changeToSymlink": true,
 	"modeChange":      true,
-
 	// TODO(bkeyes): This fails because the test file is executable, but fails
-	// post-apply, not on validation. Make sure we reject the patch and also
-	// add a test with a normal file to make sure rename work.
-	"renameFile": true,
+	// post-apply, not on validation. Make sure we reject the patch instead.
+	"renameExecFile": true,
 }
 
 func TestGraphQLApplier(t *testing.T) {

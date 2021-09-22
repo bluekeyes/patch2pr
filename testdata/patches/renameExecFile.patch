@@ -1,0 +1,4 @@
+diff --git a/script.sh b/exec.sh
+similarity index 100%
+rename from script.sh
+rename to exec.sh

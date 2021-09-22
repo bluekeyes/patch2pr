@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
@@ -165,8 +164,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 		Repository struct {
 			Object struct {
 				Blob struct {
-					Type        string `graphql:"__typename"` // Use to check existence
-					CommitURL   githubv4.URI
+					OID         string
 					IsTruncated bool
 					Text        *string
 				} `graphql:"... on Blob"`
@@ -184,7 +182,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 	}
 
 	blob := q.Repository.Object.Blob
-	if blob.Type == "" {
+	if blob.OID == "" {
 		return nil, false, nil
 	}
 	if !blob.IsTruncated && blob.Text != nil {
@@ -197,21 +195,11 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 		return nil, true, errors.New("file content not available via GraphQL, a v3 client is required")
 	}
 
-	req, err := a.v3client.NewRequest("GET", blob.CommitURL.String(), nil)
+	b, _, err := a.v3client.Git.GetBlobRaw(ctx, a.owner, a.repo, blob.OID)
 	if err != nil {
-		return nil, true, fmt.Errorf("create file content request failed: %w", err)
+		return nil, true, fmt.Errorf("get blob failed: %w", err)
 	}
-	req.Header.Set("Accept", "application/vnd.github.v3.raw") // TODO(bkeyes): is this needed?
-
-	var b bytes.Buffer
-	resp, err := a.v3client.Do(ctx, req, &b)
-	if err != nil {
-		return nil, true, fmt.Errorf("get file content failed: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, true, fmt.Errorf("get file content failed: unexpected status code: %d", resp.StatusCode)
-	}
-	return b.Bytes(), true, nil
+	return b, true, nil
 }
 
 // Commit creates a commit with all pending file changes. It updates the branch
