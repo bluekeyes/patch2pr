@@ -223,6 +223,10 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 // other fields set in header. In particular, the commit timestamp, author, and
 // committer are always set by GitHub.
 func (a *GraphQLApplier) Commit(ctx context.Context, ref string, header *gitdiff.PatchHeader) (string, error) {
+	if len(a.changes) == 0 {
+		return "", fmt.Errorf("no pending file changes")
+	}
+
 	var m struct {
 		CreateCommitOnBranch struct {
 			Commit struct {
@@ -243,33 +247,51 @@ func (a *GraphQLApplier) Commit(ctx context.Context, ref string, header *gitdiff
 	return oid, nil
 }
 
-func (a *GraphQLApplier) makeInput(ref string, header *gitdiff.PatchHeader) CreateCommitOnBranchInput {
-	input := CreateCommitOnBranchInput{
-		Branch: committableBranch{
-			BranchName:              ref,
-			RepositoryNameWithOwner: fmt.Sprintf("%s/%s", a.owner, a.repo),
+func (a *GraphQLApplier) makeInput(ref string, header *gitdiff.PatchHeader) githubv4.CreateCommitOnBranchInput {
+	branch := githubv4.String(ref)
+	repoNameWithOwner := githubv4.String(fmt.Sprintf("%s/%s", a.owner, a.repo))
+
+	input := githubv4.CreateCommitOnBranchInput{
+		Branch: githubv4.CommittableBranch{
+			BranchName:              &branch,
+			RepositoryNameWithOwner: &repoNameWithOwner,
 		},
-		ExpectedHeadOID: githubv4.GitObjectID(a.commit),
-		Message: commitMessage{
-			Headline: DefaultCommitMessage,
+		ExpectedHeadOid: githubv4.GitObjectID(a.commit),
+		Message: githubv4.CommitMessage{
+			Headline: githubv4.String(DefaultCommitMessage),
 		},
+		FileChanges: &githubv4.FileChanges{},
 	}
 
 	if header != nil {
-		input.Message.Headline = header.Title
-		input.Message.Body = header.Body
+		input.Message.Headline = githubv4.String(header.Title)
+		if header.Body != "" {
+			body := githubv4.String(header.Body)
+			input.Message.Body = &body
+		}
 	}
 
+	var dels []githubv4.FileDeletion
+	var adds []githubv4.FileAddition
 	for path, change := range a.changes {
 		switch {
 		case change.IsDelete:
-			del := fileDeletion{Path: path}
-			input.FileChanges.Deletions = append(input.FileChanges.Deletions, del)
+			dels = append(dels, githubv4.FileDeletion{
+				Path: githubv4.String(path),
+			})
 		default:
-			b64content := base64.StdEncoding.EncodeToString(change.Content)
-			add := fileAddition{Path: path, Contents: b64content}
-			input.FileChanges.Additions = append(input.FileChanges.Additions, add)
+			content := base64.StdEncoding.EncodeToString(change.Content)
+			adds = append(adds, githubv4.FileAddition{
+				Path:     githubv4.String(path),
+				Contents: githubv4.Base64String(content),
+			})
 		}
+	}
+	if len(dels) > 0 {
+		input.FileChanges.Deletions = &dels
+	}
+	if len(adds) > 0 {
+		input.FileChanges.Additions = &adds
 	}
 
 	return input
@@ -288,39 +310,4 @@ func isStdMode(m os.FileMode) bool {
 
 func isModeChange(m1, m2 os.FileMode) bool {
 	return m1 != 0 && m2 != 0 && m1 == m2
-}
-
-// TODO(bkeyes): this needs to be public to match the type name in the schema,
-// since shurcooL/graphql uses the Go type name to write the GraphQL type when
-// generating the schema. Usually these exist in the githubv4 library, but this
-// one hasn't been added yet.
-type CreateCommitOnBranchInput struct {
-	Branch          committableBranch    `json:"branch"`
-	ExpectedHeadOID githubv4.GitObjectID `json:"expectedHeadOid"`
-	FileChanges     fileChanges          `json:"fileChanges"`
-	Message         commitMessage        `json:"message"`
-}
-
-type committableBranch struct {
-	BranchName              string `json:"branchName"`
-	RepositoryNameWithOwner string `json:"repositoryNameWithOwner"`
-}
-
-type fileChanges struct {
-	Additions []fileAddition `json:"additions,omitempty"`
-	Deletions []fileDeletion `json:"deletions,omitempty"`
-}
-
-type fileAddition struct {
-	Path     string `json:"path"`
-	Contents string `json:"contents"`
-}
-
-type fileDeletion struct {
-	Path string `json:"path"`
-}
-
-type commitMessage struct {
-	Body     string `json:"body"`
-	Headline string `json:"headline"`
 }
