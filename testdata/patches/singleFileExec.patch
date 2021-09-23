@@ -1,0 +1,8 @@
+diff --git a/script.sh b/script.sh
+index b630d5e..f5cfb99 100755
+--- a/script.sh
++++ b/script.sh
+@@ -1,2 +1,2 @@
+ #!/bin/bash
+-echo "This file is executable"
++echo "This file is executable, after modification"
