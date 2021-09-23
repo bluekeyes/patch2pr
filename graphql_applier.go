@@ -8,34 +8,40 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/google/go-github/v39/github"
 	"github.com/shurcooL/githubv4"
 )
 
+const (
+	defaultMode = os.FileMode(0o100644)
+)
+
 // GraphQLApplier applies patches to create commits in a repository. Compared
 // to the normal Applier, the GraphqQLApplier:
 //
-//  * Makes fewer API requests in total
+//  * Generally makes fewer API requests
 //  * Does not support setting a commit author or committer
-//  * Does not accept patches that use file modes other than the default
+//  * Does not support files that use a non-default file mode
 //  * Does not create intermediate blobs and trees
 //  * Uses more memory while applying patches with multiple files
 //  * Updates a branch (which must exist) to reference the new commit
 //  * Creates signed commits
 //
-// Using a GraphQLApplier is usually recommended, unless you need the control
-// provided by the regular Applier or your target GitHub instance does not
-// support the necessary GraphQL endpoints.
+// Using a GraphQLApplier is a good default choice for well-known patch
+// content. Use the plain Applier For arbitrary or complex patches or if your
+// target GitHub instance does not support the necessary GraphQL endpoints.
 type GraphQLApplier struct {
 	v4client *githubv4.Client
 	v3client *github.Client
 	owner    string
 	repo     string
 
-	commit  string
-	changes map[string]pendingChange
+	commit    string
+	changes   map[string]pendingChange
+	modeCache map[string]os.FileMode
 }
 
 type pendingChange struct {
@@ -70,14 +76,41 @@ func (a *GraphQLApplier) SetV3Client(client *github.Client) {
 // Apply applies the changes in a file, adding the result to the list of
 // pending file changes. It does not modify the repository.
 func (a *GraphQLApplier) Apply(ctx context.Context, f *gitdiff.File) error {
+	// As of 2021-09-22, createCommitOnBranch handles file modes
+	// inconsistently:
+	//
+	//   1. All new files use 644
+	//   2. It's not possible to change the mode of an existing file
+	//   3. Modifying an existing file retains the existing mode
+	//   4. Renaming a file converts it to 644 (modeled as a remove and add)
+	//   5. Mode isn't relevant when removing a file
+	//
+	// While (3) and (5) aren't actually limitations, reject non-standard modes
+	// anyway to make it easier to reason about when a patch is supported.
+
+	// Check (1) and (2) using patch information
 	if isModeChange(f.OldMode, f.NewMode) {
-		return fmt.Errorf("cannot apply patch that changes file modes")
+		return unsupported("GraphQL cannot change file modes")
 	}
-	if !isStdMode(f.NewMode) {
-		return fmt.Errorf("cannot apply file with unsupported mode: %o", f.NewMode)
+	if f.NewMode != 0 && f.NewMode != defaultMode {
+		return unsupported("GraphQL cannot change files with non-standard modes: %o", f.NewMode)
 	}
-	// TODO(bkeyes): reject renames of files with non-standard modes
-	// TODO(bkeyes): what does GitHub do if we modify the content of an existing file with a non-standard mode?
+
+	// Check for (3), (4), and (5) using tree entry data
+	if !f.IsNew {
+		name := f.OldName
+		if name == "" {
+			name = f.NewName
+		}
+
+		existingMode, err := a.getMode(ctx, name)
+		if err != nil {
+			return err
+		}
+		if existingMode != defaultMode {
+			return unsupported("GraphQL cannot change files with non-standard modes: %o", existingMode)
+		}
+	}
 
 	switch {
 	case f.IsNew:
@@ -104,6 +137,7 @@ func (a *GraphQLApplier) applyCreate(ctx context.Context, f *gitdiff.File) error
 	}
 
 	a.changes[f.NewName] = pendingChange{Content: b.Bytes()}
+	a.modeCache[f.NewName] = defaultMode
 	return nil
 }
 
@@ -149,11 +183,12 @@ func (a *GraphQLApplier) applyModify(ctx context.Context, f *gitdiff.File) error
 	}
 
 	a.changes[f.NewName] = pendingChange{Content: data}
+	a.modeCache[f.NewName] = defaultMode
 	return nil
 }
 
-func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, bool, error) {
-	if existing, ok := a.changes[path]; ok {
+func (a *GraphQLApplier) getContent(ctx context.Context, filePath string) ([]byte, bool, error) {
+	if existing, ok := a.changes[filePath]; ok {
 		if existing.IsDelete {
 			return nil, false, nil
 		}
@@ -174,11 +209,11 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 	vars := map[string]interface{}{
 		"owner": githubv4.String(a.owner),
 		"name":  githubv4.String(a.repo),
-		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, path)),
+		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, filePath)),
 	}
 
 	if err := a.v4client.Query(ctx, &q, vars); err != nil {
-		return nil, false, fmt.Errorf("repository object query failed: %w", err)
+		return nil, false, fmt.Errorf("repository blob query failed: %w", err)
 	}
 
 	blob := q.Repository.Object.Blob
@@ -192,7 +227,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 	// Either the file is binary or is too big for GraphQL, so fall back to the
 	// REST API if a client is available
 	if a.v3client == nil {
-		return nil, true, errors.New("file content not available via GraphQL, a v3 client is required")
+		return nil, true, unsupported("GraphQL cannot read this file's content and the applier has no fallback v3 client")
 	}
 
 	b, _, err := a.v3client.Git.GetBlobRaw(ctx, a.owner, a.repo, blob.OID)
@@ -200,6 +235,46 @@ func (a *GraphQLApplier) getContent(ctx context.Context, path string) ([]byte, b
 		return nil, true, fmt.Errorf("get blob failed: %w", err)
 	}
 	return b, true, nil
+}
+
+func (a *GraphQLApplier) getMode(ctx context.Context, filePath string) (os.FileMode, error) {
+	if m, ok := a.modeCache[filePath]; ok {
+		return m, nil
+	}
+
+	var q struct {
+		Repository struct {
+			Object struct {
+				Tree struct {
+					Entries []struct {
+						Type string
+						Path string
+						Mode int
+					}
+				} `graphql:"... on Tree"`
+			} `graphql:"object(expression: $expr)"`
+		} `graphql:"repository(owner: $owner, name: $name)"`
+	}
+	vars := map[string]interface{}{
+		"owner": githubv4.String(a.owner),
+		"name":  githubv4.String(a.repo),
+		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, treePath(filePath))),
+	}
+
+	if err := a.v4client.Query(ctx, &q, vars); err != nil {
+		return 0, fmt.Errorf("repository tree query failed: %w", err)
+	}
+
+	for _, entry := range q.Repository.Object.Tree.Entries {
+		if entry.Type == "blob" {
+			a.modeCache[entry.Path] = os.FileMode(entry.Mode)
+		}
+	}
+
+	if m, ok := a.modeCache[filePath]; ok {
+		return m, nil
+	}
+	return 0, fmt.Errorf("file did not appear in tree entries: %s", filePath)
 }
 
 // Commit creates a commit with all pending file changes. It updates the branch
@@ -290,12 +365,17 @@ func (a *GraphQLApplier) makeInput(ref string, header *gitdiff.PatchHeader) gith
 func (a *GraphQLApplier) Reset(base string) {
 	a.commit = base
 	a.changes = make(map[string]pendingChange)
-}
-
-func isStdMode(m os.FileMode) bool {
-	return m == 0 || m == 0o100644
+	a.modeCache = make(map[string]os.FileMode)
 }
 
 func isModeChange(m1, m2 os.FileMode) bool {
 	return m1 != 0 && m2 != 0 && m1 == m2
+}
+
+func treePath(filePath string) string {
+	tp := path.Dir(filePath)
+	if tp == "." {
+		return ""
+	}
+	return tp
 }

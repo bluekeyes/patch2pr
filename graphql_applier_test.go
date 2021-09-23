@@ -9,14 +9,13 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
 
-// GraphQLSkipPatches contains the names of patches that cannot be applied
+// GraphQLUnsupportedPatches contains the names of patches that cannot be applied
 // by the GraphQLApplier due to API limitation.
-var GraphQLSkipPatches = map[string]bool{
+var GraphQLUnsupportedPatches = map[string]bool{
 	"changeToSymlink": true,
 	"modeChange":      true,
-	// TODO(bkeyes): This fails because the test file is executable, but fails
-	// post-apply, not on validation. Make sure we reject the patch instead.
-	"renameExecFile": true,
+	"renameExecFile":  true,
+	"singleFileExec":  true,
 }
 
 func TestGraphQLApplier(t *testing.T) {
@@ -37,9 +36,6 @@ func TestGraphQLApplier(t *testing.T) {
 	for _, patch := range patches {
 		name := strings.TrimSuffix(filepath.Base(patch), ".patch")
 		t.Run(name, func(t *testing.T) {
-			if GraphQLSkipPatches[name] {
-				t.Skip("incompatible with GraphQL applier")
-			}
 			runGraphQLPatchTest(t, tctx, name)
 		})
 	}
@@ -60,10 +56,18 @@ func runGraphQLPatchTest(t *testing.T, tctx *TestContext, name string) {
 	applier := NewGraphQLApplier(tctx.V4Client, tctx.Repo, tctx.BaseCommit.GetSHA())
 	applier.SetV3Client(tctx.Client)
 
+	unsupported := false
 	for _, file := range files {
 		if err := applier.Apply(tctx, file); err != nil {
+			if GraphQLUnsupportedPatches[name] && IsUnsupported(err) {
+				unsupported = true
+				continue
+			}
 			t.Fatalf("error applying file patch: %s: %v", file.NewName, err)
 		}
+	}
+	if unsupported {
+		return
 	}
 
 	// GraphQL applies require that the target branch already exists
