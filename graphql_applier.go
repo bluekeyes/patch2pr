@@ -24,15 +24,15 @@ const (
 //
 //  * Generally makes fewer API requests
 //  * Does not support setting a commit author or committer
-//  * Does not support files that use a non-default file mode
 //  * Does not create intermediate blobs and trees
 //  * Uses more memory while applying patches with multiple files
 //  * Updates a branch (which must exist) to reference the new commit
 //  * Creates signed commits
 //
-// Using a GraphQLApplier is a good default choice for well-known patch
-// content. Use the plain Applier For arbitrary or complex patches or if your
-// target GitHub instance does not support the necessary GraphQL endpoints.
+// Due to limitations in the GraphQL API, not all patches are supported; see
+// Apply. Use the regular Applier if you need to apply arbitrary patches or if
+// you are targeting a GitHub Enterprise instance that does not support the
+// createCommitOnBranch GraphQL mutation.
 type GraphQLApplier struct {
 	v4client *githubv4.Client
 	v3client *github.Client
@@ -64,17 +64,23 @@ func NewGraphQLApplier(client *githubv4.Client, repo Repository, base string) *G
 // SetV3Client sets a REST API client used to implement functionality missing
 // in the GraphQL API. Without a V3 client, the applier will fail on patches
 // that modify binary and very large files.
-//
-// TODO(bkeyes): is this a good idea? It could be a required construction
-// parameter or an option function instead. I moved away from a required
-// parameter to avoid a breaking change if the GraphQL API improves to the
-// point where this is not needed.
 func (a *GraphQLApplier) SetV3Client(client *github.Client) {
 	a.v3client = client
 }
 
 // Apply applies the changes in a file, adding the result to the list of
 // pending file changes. It does not modify the repository.
+//
+// Due to GraphQL limitations, some patches are not supported:
+//
+//   * Adding or renaming files that use a non-standard mode
+//   * Changing the mode of an existing file
+//   * Modifying or deleting binary files (without a V3 client)
+//   * Modifying or deleting large files (without a V3 client)
+//
+// When given an unsupported patch, Apply returns an error such that
+// IsUnsupported(err) is true. Setting a V3 client with SetV3Client allows
+// Apply to process some patches that are otherwise unsupported.
 func (a *GraphQLApplier) Apply(ctx context.Context, f *gitdiff.File) error {
 	// As of 2021-09-22, createCommitOnBranch handles file modes
 	// inconsistently:
@@ -85,30 +91,18 @@ func (a *GraphQLApplier) Apply(ctx context.Context, f *gitdiff.File) error {
 	//   4. Renaming a file converts it to 644 (modeled as a remove and add)
 	//   5. Mode isn't relevant when removing a file
 	//
-	// While (3) and (5) aren't actually limitations, reject non-standard modes
-	// anyway to make it easier to reason about when a patch is supported.
-
-	// Check (1) and (2) using patch information
-	if isModeChange(f.OldMode, f.NewMode) {
+	switch {
+	case f.NewMode != 0 && f.NewMode != defaultMode:
+		return unsupported("GraphQL cannot apply files with non-standard modes: %o", f.NewMode)
+	case isModeChange(f.OldMode, f.NewMode):
 		return unsupported("GraphQL cannot change file modes")
-	}
-	if f.NewMode != 0 && f.NewMode != defaultMode {
-		return unsupported("GraphQL cannot change files with non-standard modes: %o", f.NewMode)
-	}
-
-	// Check for (3), (4), and (5) using tree entry data
-	if !f.IsNew {
-		name := f.OldName
-		if name == "" {
-			name = f.NewName
-		}
-
-		existingMode, err := a.getMode(ctx, name)
+	case isRename(f):
+		existingMode, err := a.getMode(ctx, f.OldName)
 		if err != nil {
 			return err
 		}
 		if existingMode != defaultMode {
-			return unsupported("GraphQL cannot change files with non-standard modes: %o", existingMode)
+			return unsupported("GraphQL cannot rename files with non-standard modes: %o", existingMode)
 		}
 	}
 
@@ -227,7 +221,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, filePath string) ([]byt
 	// Either the file is binary or is too big for GraphQL, so fall back to the
 	// REST API if a client is available
 	if a.v3client == nil {
-		return nil, true, unsupported("GraphQL cannot read this file's content and the applier has no fallback v3 client")
+		return nil, true, unsupported("GraphQL cannot read the file content and there is no fallback v3 client")
 	}
 
 	b, _, err := a.v3client.Git.GetBlobRaw(ctx, a.owner, a.repo, blob.OID)
@@ -369,7 +363,14 @@ func (a *GraphQLApplier) Reset(base string) {
 }
 
 func isModeChange(m1, m2 os.FileMode) bool {
-	return m1 != 0 && m2 != 0 && m1 == m2
+	return m1 != 0 && m2 != 0 && m1 != m2
+}
+
+func isRename(f *gitdiff.File) bool {
+	if f.IsRename {
+		return true
+	}
+	return f.OldName != "" && f.NewName != "" && f.OldName != f.NewName
 }
 
 func treePath(filePath string) string {

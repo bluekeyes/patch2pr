@@ -15,7 +15,6 @@ var GraphQLUnsupportedPatches = map[string]bool{
 	"changeToSymlink": true,
 	"modeChange":      true,
 	"renameExecFile":  true,
-	"singleFileExec":  true,
 }
 
 func TestGraphQLApplier(t *testing.T) {
@@ -68,6 +67,9 @@ func runGraphQLPatchTest(t *testing.T, tctx *TestContext, name string) {
 	}
 	if unsupported {
 		return
+	}
+	if GraphQLUnsupportedPatches[name] {
+		t.Fatalf("patch is unsupported, but Apply did not return an error")
 	}
 
 	// GraphQL applies require that the target branch already exists
