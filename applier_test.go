@@ -15,6 +15,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/google/go-github/v39/github"
+	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
 
@@ -61,7 +62,8 @@ type TestContext struct {
 	BaseCommit *github.Commit
 	BaseTree   *github.Tree
 
-	Client *github.Client
+	Client   *github.Client
+	V4Client *githubv4.Client
 }
 
 func (tctx *TestContext) Branch(name string) string {
@@ -234,15 +236,16 @@ func prepareTestContext(t *testing.T) *TestContext {
 	}
 
 	ctx := context.Background()
-	client := github.NewClient(oauth2.NewClient(ctx, oauth2.StaticTokenSource(
+	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
-	)))
+	))
 
 	tctx := TestContext{
-		Context: ctx,
-		ID:      id,
-		Repo:    repo,
-		Client:  client,
+		Context:  ctx,
+		ID:       id,
+		Repo:     repo,
+		Client:   github.NewClient(httpClient),
+		V4Client: githubv4.NewClient(httpClient),
 	}
 	return &tctx
 }
