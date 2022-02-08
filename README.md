@@ -16,9 +16,9 @@ that uses this library to apply it and create a pull request.
 
 ## Usage: CLI
 
-Install the CLI using `go get`:
+Install the CLI using `go install`:
 
-    go get -u github.com/bluekeyes/patch2pr/cmd/patch2pr
+    go install github.com/bluekeyes/patch2pr/cmd/patch2pr@latest
 
 The CLI takes a path to a patch file as the only argument or reads a patch from
 stdin if no file is given.
