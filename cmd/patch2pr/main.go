@@ -37,6 +37,7 @@ type Options struct {
 	Repository    *patch2pr.Repository
 	GitHubToken   string
 	GitHubURL     *url.URL
+	PullBody      string
 }
 
 func main() {
@@ -55,6 +56,7 @@ func main() {
 	fs.StringVar(&opts.Message, "message", "", "message")
 	fs.BoolVar(&opts.NoPullRequest, "no-pull-request", false, "no-pull-request")
 	fs.StringVar(&opts.PatchBase, "patch-base", "", "patch-base")
+	fs.StringVar(&opts.PullBody, "pull-body", "", "pull-body")
 	fs.StringVar(&opts.PullTitle, "pull-title", "", "pull-title")
 	fs.Var(RepositoryValue{&opts.Repository}, "repository", "repository")
 	fs.StringVar(&opts.GitHubToken, "token", "", "token")
@@ -208,6 +210,14 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 			title, body = splitMessage(opts.Message)
 		} else {
 			title, body = splitMessage(newCommit.GetMessage())
+		}
+
+		if opts.PullTitle != "" {
+			title = opts.PullTitle
+		}
+
+		if opts.PullBody != "" {
+			body = opts.PullBody
 		}
 
 		if pr, err = ref.PullRequest(ctx, &github.NewPullRequest{
