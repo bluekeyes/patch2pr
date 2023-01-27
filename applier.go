@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v48/github"
+	"github.com/google/go-github/v50/github"
 )
 
 // DefaultCommitMessage is the commit message used when no message is provided
