@@ -382,7 +382,7 @@ func makeCommitAuthor(id *gitdiff.PatchIdentity, d time.Time) *github.CommitAuth
 		}
 	}
 	if !d.IsZero() {
-		a.Date = &d
+		a.Date = &github.Timestamp{Time: d}
 	}
 	return a
 }
