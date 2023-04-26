@@ -11,7 +11,7 @@ import (
 	"path"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v50/github"
+	"github.com/google/go-github/v52/github"
 	"github.com/shurcooL/githubv4"
 )
 
