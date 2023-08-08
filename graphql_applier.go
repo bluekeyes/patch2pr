@@ -22,12 +22,12 @@ const (
 // GraphQLApplier applies patches to create commits in a repository. Compared
 // to the normal Applier, the GraphqQLApplier:
 //
-//  * Generally makes fewer API requests
-//  * Does not support setting a commit author or committer
-//  * Does not create intermediate blobs and trees
-//  * Uses more memory while applying patches with multiple files
-//  * Updates a branch (which must exist) to reference the new commit
-//  * Creates signed commits
+//   - Generally makes fewer API requests
+//   - Does not support setting a commit author or committer
+//   - Does not create intermediate blobs and trees
+//   - Uses more memory while applying patches with multiple files
+//   - Updates a branch (which must exist) to reference the new commit
+//   - Creates signed commits
 //
 // Due to limitations in the GraphQL API, not all patches are supported; see
 // Apply. Use the regular Applier if you need to apply arbitrary patches or if
@@ -73,10 +73,10 @@ func (a *GraphQLApplier) SetV3Client(client *github.Client) {
 //
 // Due to GraphQL limitations, some patches are not supported:
 //
-//   * Adding or renaming files that use a non-standard mode
-//   * Changing the mode of an existing file
-//   * Modifying or deleting binary files (without a V3 client)
-//   * Modifying or deleting large files (without a V3 client)
+//   - Adding or renaming files that use a non-standard mode
+//   - Changing the mode of an existing file
+//   - Modifying or deleting binary files (without a V3 client)
+//   - Modifying or deleting large files (without a V3 client)
 //
 // When given an unsupported patch, Apply returns an error such that
 // IsUnsupported(err) is true. Setting a V3 client with SetV3Client allows
