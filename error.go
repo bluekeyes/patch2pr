@@ -25,9 +25,9 @@ func (err unsupportedErr) Unsupported() bool {
 // operation. It is equivalent to finding the first error in err's chain that
 // implements
 //
-//     type unsupported interface {
-//         Unsupported() bool
-//     }
+//	type unsupported interface {
+//	    Unsupported() bool
+//	}
 //
 // and then calling the Unsupported() method.
 func IsUnsupported(err error) bool {
