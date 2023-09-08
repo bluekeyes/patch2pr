@@ -16,7 +16,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr"
-	"github.com/google/go-github/v53/github"
+	"github.com/google/go-github/v55/github"
 	"golang.org/x/oauth2"
 )
 
