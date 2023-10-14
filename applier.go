@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v55/github"
+	"github.com/google/go-github/v56/github"
 )
 
 // DefaultCommitMessage is the commit message used when no message is provided
@@ -261,7 +261,7 @@ func (a *Applier) Commit(ctx context.Context, tmpl *github.Commit, header *gitdi
 		c.Message = github.String("Apply patch with patch2pr")
 	}
 
-	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, &c)
+	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, &c, nil)
 	if err != nil {
 		return nil, err
 	}

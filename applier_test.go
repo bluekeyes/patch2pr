@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v55/github"
+	"github.com/google/go-github/v56/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
@@ -310,10 +310,11 @@ func createBranch(t *testing.T, tctx *TestContext) {
 		t.Fatalf("error getting recursive tree: %v", err)
 	}
 
-	commit, _, err := tctx.Client.Git.CreateCommit(tctx, tctx.Repo.Owner, tctx.Repo.Name, &github.Commit{
+	commit := &github.Commit{
 		Message: github.String("Base commit for test"),
 		Tree:    tree,
-	})
+	}
+	commit, _, err = tctx.Client.Git.CreateCommit(tctx, tctx.Repo.Owner, tctx.Repo.Name, commit, nil)
 	if err != nil {
 		t.Fatalf("error creating commit: %v", err)
 	}
