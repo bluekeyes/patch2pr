@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v56/github"
+	"github.com/google/go-github/v57/github"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
 )
