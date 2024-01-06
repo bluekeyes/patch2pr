@@ -66,6 +66,8 @@ Options:
   -base-branch=branch  The branch to target with the pull request. If unset,
                        use the repository's default branch.
 
+  -draft               Create a draft pull request.
+
   -force               Update the head branch even if it exists and is not a
                        fast-forward.
 

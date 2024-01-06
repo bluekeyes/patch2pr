@@ -27,6 +27,7 @@ func die(code int, err error) {
 
 type Options struct {
 	BaseBranch    string
+	Draft         bool
 	Force         bool
 	HeadBranch    string
 	OutputJSON    bool
@@ -50,6 +51,7 @@ func main() {
 	fs.Usage = func() {}
 
 	fs.StringVar(&opts.BaseBranch, "base-branch", "", "base-branch")
+	fs.BoolVar(&opts.Draft, "draft", false, "draft")
 	fs.BoolVar(&opts.Force, "force", false, "force")
 	fs.StringVar(&opts.HeadBranch, "head-branch", "patch2pr", "head-branch")
 	fs.BoolVar(&opts.OutputJSON, "json", false, "json")
@@ -224,6 +226,7 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 			Title: &title,
 			Body:  &body,
 			Base:  &baseBranch,
+			Draft: &opts.Draft,
 		}); err != nil {
 			return nil, fmt.Errorf("create pull request failed: %w", err)
 		}
@@ -344,6 +347,8 @@ Options:
 
   -base-branch=branch  The branch to target with the pull request. If unset,
                        use the repository's default branch.
+
+  -draft               Create a draft pull request.
 
   -force               Update the head branch even if it exists and is not a
                        fast-forward.
