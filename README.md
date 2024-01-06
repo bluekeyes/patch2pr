@@ -26,8 +26,11 @@ stdin if no file is given.
 The other required arguments are:
 
 - The `-repository` flag to specify the repository in `owner/name` format
-- A GitHub token with `repo` scope, either with the `-token` flag or in the
-  `GITHUB_TOKEN` environment variable.
+- A GitHub token, set with the `-token` flag or in the `GITHUB_TOKEN`
+  environment variable.
+  - Classic tokens must have `repo` scope
+  - Fine-grained tokens must have read and write access to contents and pull
+    requests
 
 For example:
 
