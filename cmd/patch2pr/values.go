@@ -49,3 +49,23 @@ func (v URLValue) Set(s string) error {
 	*v.u = u
 	return nil
 }
+
+type ForkValue struct {
+	RepositoryValue
+	enabled *bool
+}
+
+func (v ForkValue) String() string {
+	if v.enabled == nil || !*v.enabled {
+		return ""
+	}
+	return v.RepositoryValue.String()
+}
+
+func (v ForkValue) Set(s string) error {
+	if err := v.RepositoryValue.Set(s); err != nil {
+		return err
+	}
+	*v.enabled = true
+	return nil
+}

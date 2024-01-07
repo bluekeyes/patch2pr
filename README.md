@@ -66,43 +66,52 @@ Usage: patch2pr [options] [patch]
 
 Options:
 
-  -base-branch=branch  The branch to target with the pull request. If unset,
-                       use the repository's default branch.
+  -base-branch=branch    The branch to target with the pull request. If unset,
+                         use the repository's default branch.
 
-  -draft               Create a draft pull request.
+  -draft                 Create a draft pull request.
 
-  -force               Update the head branch even if it exists and is not a
-                       fast-forward.
+  -force                 Update the head branch even if it exists and is not a
+                         fast-forward.
 
-  -head-branch=branch  The branch to create or update with the new commit. If
-                       unset, use 'patch2pr'.
+  -fork                  Submit the pull request from a fork instead of pushing
+                         directly to the repository. With no other flags, use a
+                         fork in the current account with the same name as the
+                         target repository, creating the fork if it does not exist.
 
-  -json                Output information about the new commit and pull request
-                       in JSON format.
+  -fork-repository=repo  Submit the pull request from the named fork instead of
+                         pushing directly to the repository, creating the fork
+                         if it does not exist. Implies the -fork flag.
 
-  -message=message     Message for the commit. Overrides the patch header.
+  -head-branch=branch    The branch to create or update with the new commit. If
+                         unset, use 'patch2pr'.
 
-  -no-pull-request     Do not create a pull request after creating a commit.
+  -json                  Output information about the new commit and pull request
+                         in JSON format.
 
-  -patch-base=base     Base commit to apply the patch to. Can be a SHA1, a
-                       branch, or a tag. Branches and tags must start with
-                       'refs/heads/' or 'refs/tags/' respectively. If unset,
-                       use the repository's default branch.
+  -message=message       Message for the commit. Overrides the patch header.
 
-  -pull-body=body      The body for the pull request. If unset, use the body of
-                       the commit message.
+  -no-pull-request       Do not create a pull request after creating a commit.
 
-  -pull-title=title    The title for the pull request. If unset, use the title
-                       of the commit message.
+  -patch-base=base       Base commit to apply the patch to. Can be a SHA1, a
+                         branch, or a tag. Branches and tags must start with
+                         'refs/heads/' or 'refs/tags/' respectively. If unset,
+                         use the repository's default branch.
 
-  -repository=repo     Repository to apply the patch to in 'owner/name' format.
-                       Required.
+  -pull-body=body        The body for the pull request. If unset, use the body of
+                         the commit message.
 
-  -token=token         GitHub API token with 'repo' scope for authentication.
-                       If unset, use the value of the GITHUB_TOKEN environment
-                       variable.
+  -pull-title=title      The title for the pull request. If unset, use the title
+                         of the commit message.
 
-  -url=url             GitHub API URL. If unset, use https://api.github.com.
+  -repository=repo       Repository to apply the patch to in 'owner/name' format.
+                         Required.
+
+  -token=token           GitHub API token with 'repo' scope for authentication.
+                         If unset, use the value of the GITHUB_TOKEN environment
+                         variable.
+
+  -url=url               GitHub API URL. If unset, use https://api.github.com.
 ```
 
 ## Usage: Library
