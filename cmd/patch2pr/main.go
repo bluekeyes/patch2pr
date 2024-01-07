@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -22,6 +23,18 @@ import (
 
 func die(code int, err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
+
+	var rerr *github.ErrorResponse
+	if errors.As(err, &rerr) && rerr.Response.StatusCode == http.StatusNotFound {
+		fmt.Fprint(os.Stderr, `
+This may be because the repository does not exit or the token you are using
+does not have write permission. If submitting a patch to a repository where you
+do not have write access, consider using the -fork flag to submit the patch
+from a fork.
+`,
+		)
+	}
+
 	os.Exit(code)
 }
 
