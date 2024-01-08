@@ -24,8 +24,7 @@ import (
 func die(code int, err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 
-	var rerr *github.ErrorResponse
-	if errors.As(err, &rerr) && rerr.Response.StatusCode == http.StatusNotFound {
+	if isNotFound(err) {
 		fmt.Fprint(os.Stderr, `
 This may be because the repository does not exit or the token you are using
 does not have write permission. If submitting a patch to a repository where you
@@ -150,11 +149,11 @@ type PullRequestResult struct {
 }
 
 func execute(ctx context.Context, client *github.Client, patchFile string, opts *Options) (*Result, error) {
-	repo := *opts.Repository
+	targetRepo := *opts.Repository
 	patchBase, baseBranch, headBranch := opts.PatchBase, opts.BaseBranch, opts.HeadBranch
 
 	if patchBase == "" || (baseBranch == "" && !opts.NoPullRequest) {
-		r, _, err := client.Repositories.Get(ctx, repo.Owner, repo.Name)
+		r, _, err := client.Repositories.Get(ctx, targetRepo.Owner, targetRepo.Name)
 		if err != nil {
 			return nil, fmt.Errorf("get repository failed: %w", err)
 		}
@@ -167,14 +166,14 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 	}
 
 	if strings.HasPrefix(patchBase, "refs/") {
-		ref, _, err := client.Git.GetRef(ctx, repo.Owner, repo.Name, strings.TrimPrefix(patchBase, "refs/"))
+		ref, _, err := client.Git.GetRef(ctx, targetRepo.Owner, targetRepo.Name, strings.TrimPrefix(patchBase, "refs/"))
 		if err != nil {
 			return nil, fmt.Errorf("get ref for patch base %q failed: %w", patchBase, err)
 		}
 		patchBase = ref.GetObject().GetSHA()
 	}
 
-	commit, _, err := client.Git.GetCommit(ctx, repo.Owner, repo.Name, patchBase)
+	commit, _, err := client.Git.GetCommit(ctx, targetRepo.Owner, targetRepo.Name, patchBase)
 	if err != nil {
 		return nil, fmt.Errorf("get commit for %s failed: %w", patchBase, err)
 	}
@@ -204,7 +203,12 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		}
 	}
 
-	applier := patch2pr.NewApplier(client, repo, commit)
+	sourceRepo, err := prepareSourceRepo(ctx, client, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	applier := patch2pr.NewApplier(client, sourceRepo, commit)
 	for _, file := range files {
 		if _, err := applier.Apply(ctx, file); err != nil {
 			name := file.NewName
@@ -220,7 +224,7 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		return nil, fmt.Errorf("commit failed: %w", err)
 	}
 
-	ref := patch2pr.NewReference(client, repo, fmt.Sprintf("refs/heads/%s", headBranch))
+	ref := patch2pr.NewReference(client, sourceRepo, fmt.Sprintf("refs/heads/%s", headBranch))
 	if err := ref.Set(ctx, newCommit.GetSHA(), opts.Force); err != nil {
 		return nil, fmt.Errorf("set ref failed: %w", err)
 	}
@@ -242,12 +246,21 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 			body = opts.PullBody
 		}
 
-		if pr, err = ref.PullRequest(ctx, &github.NewPullRequest{
+		prSpec := &github.NewPullRequest{
 			Title: &title,
 			Body:  &body,
 			Base:  &baseBranch,
 			Draft: &opts.Draft,
-		}); err != nil {
+		}
+
+		if sourceRepo == targetRepo {
+			prSpec.Head = &headBranch
+		} else {
+			prSpec.Head = github.String(fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch))
+			prSpec.HeadRepo = &sourceRepo.Name
+		}
+
+		if pr, _, err = client.PullRequests.Create(ctx, targetRepo.Owner, targetRepo.Name, prSpec); err != nil {
 			return nil, fmt.Errorf("create pull request failed: %w", err)
 		}
 	}
@@ -263,6 +276,92 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		}
 	}
 	return res, nil
+}
+
+func prepareSourceRepo(ctx context.Context, client *github.Client, opts *Options) (patch2pr.Repository, error) {
+	source := patch2pr.Repository{}
+	target := *opts.Repository
+
+	if !opts.Fork {
+		// If we're not using a fork, the source is the same as the target
+		return target, nil
+	}
+
+	user, _, err := client.Users.Get(ctx, "")
+	if err != nil {
+		return source, fmt.Errorf("get user failed: %w", err)
+	}
+
+	if opts.ForkRepository != nil {
+		source = *opts.ForkRepository
+	} else {
+		source = patch2pr.Repository{
+			Owner: user.GetLogin(),
+			Name:  target.Name,
+		}
+	}
+
+	repo, _, err := client.Repositories.Get(ctx, source.Owner, source.Name)
+	switch {
+	case isNotFound(err):
+		isUserFork := user.GetLogin() == source.Owner
+		if err := createFork(ctx, client, source, target, isUserFork); err != nil {
+			return source, fmt.Errorf("forking repository failed: %w", err)
+		}
+
+	case err != nil:
+		return source, fmt.Errorf("get fork repository failed: %w", err)
+
+	default:
+		if !repo.GetFork() || repo.GetParent().GetFullName() != target.String() {
+			return source, fmt.Errorf("fork repository %q exists, but is not a fork of %q", source, target)
+		}
+	}
+
+	return source, nil
+}
+
+func createFork(ctx context.Context, client *github.Client, fork, parent patch2pr.Repository, isUserFork bool) error {
+	const pollInterval = 5 * time.Second
+	const maxWait = 1 * time.Minute
+
+	organization := fork.Owner
+	if isUserFork {
+		organization = ""
+	}
+
+	repo, _, err := client.Repositories.CreateFork(ctx, parent.Owner, parent.Name, &github.RepositoryCreateForkOptions{
+		Organization:      organization,
+		Name:              fork.Name,
+		DefaultBranchOnly: true,
+	})
+
+	var aerr *github.AcceptedError
+	if err != nil && !errors.As(err, &aerr) {
+		return err
+	}
+
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+
+	ctx, cancel := context.WithTimeout(ctx, maxWait)
+	defer cancel()
+
+	// Poll the new repo until the default branch exists, indicating it is ready to use
+	ref := "heads/" + repo.GetDefaultBranch()
+	for {
+		select {
+		case <-ticker.C:
+			if _, _, err := client.Git.GetRef(ctx, fork.Owner, fork.Name, ref); err == nil {
+				return nil
+			} else if !isNotFound(err) && !errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "warning: error while waiting for fork to be ready, will try again: %v", err)
+			}
+
+		case <-ctx.Done():
+			return fmt.Errorf("fork repository was not ready after %s", maxWait)
+		}
+	}
 }
 
 func splitMessage(m string) (title string, body string) {
@@ -337,6 +436,11 @@ func dateFromEnv(dateType string) time.Time {
 		return d
 	}
 	return time.Time{}
+}
+
+func isNotFound(err error) bool {
+	var rerr *github.ErrorResponse
+	return errors.As(err, &rerr) && rerr.Response.StatusCode == http.StatusNotFound
 }
 
 func helpText() string {
