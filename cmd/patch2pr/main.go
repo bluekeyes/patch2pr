@@ -26,7 +26,7 @@ func die(code int, err error) {
 
 	if isNotFound(err) {
 		fmt.Fprint(os.Stderr, `
-This may be because the repository does not exit or the token you are using
+This may be because the repository does not exist or the token you are using
 does not have write permission. If submitting a patch to a repository where you
 do not have write access, consider using the -fork flag to submit the patch
 from a fork.
@@ -87,9 +87,6 @@ func main() {
 		}
 		die(2, err)
 	}
-
-	fmt.Println("fork:", opts.Fork)
-	fmt.Println("fork-repository:", opts.ForkRepository)
 
 	if opts.Repository == nil {
 		die(2, errors.New("the -repository flag is required"))
