@@ -24,7 +24,7 @@ import (
 func die(code int, err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 
-	if isNotFound(err) {
+	if isCode(err, http.StatusNotFound) {
 		fmt.Fprint(os.Stderr, `
 This may be because the repository does not exist or the token you are using
 does not have write permission. If submitting a patch to a repository where you
@@ -300,7 +300,7 @@ func prepareSourceRepo(ctx context.Context, client *github.Client, opts *Options
 
 	repo, _, err := client.Repositories.Get(ctx, source.Owner, source.Name)
 	switch {
-	case isNotFound(err):
+	case isCode(err, http.StatusNotFound):
 		isUserFork := user.GetLogin() == source.Owner
 		if err := createFork(ctx, client, source, target, isUserFork); err != nil {
 			return source, fmt.Errorf("forking repository failed: %w", err)
@@ -344,17 +344,19 @@ func createFork(ctx context.Context, client *github.Client, fork, parent patch2p
 		return fmt.Errorf("fork of %q already exists at %q, cannot create %q", parent, repo.GetFullName(), fork)
 	}
 
-	// Poll the new repo until the default branch exists, indicating it is ready to use
-	ref := "heads/" + repo.GetDefaultBranch()
 	for delay, start := initDelay, time.Now(); time.Since(start) < maxWait; delay *= 2 {
 		if delay > maxDelay {
 			delay = maxDelay
 		}
 		time.Sleep(delay)
 
-		if _, _, err := client.Git.GetRef(ctx, fork.Owner, fork.Name, ref); err == nil {
+		if _, _, err := client.Repositories.ListCommits(ctx, fork.Owner, fork.Name, &github.CommitsListOptions{
+			ListOptions: github.ListOptions{
+				PerPage: 1,
+			},
+		}); err == nil {
 			return nil
-		} else if !isNotFound(err) {
+		} else if !isCode(err, http.StatusConflict) {
 			fmt.Fprintf(os.Stderr, "warning: waiting for fork failed, but will try again: %v", err)
 		}
 	}
@@ -436,9 +438,9 @@ func dateFromEnv(dateType string) time.Time {
 	return time.Time{}
 }
 
-func isNotFound(err error) bool {
+func isCode(err error, code int) bool {
 	var rerr *github.ErrorResponse
-	return errors.As(err, &rerr) && rerr.Response.StatusCode == http.StatusNotFound
+	return errors.As(err, &rerr) && rerr.Response.StatusCode == code
 }
 
 func helpText() string {
