@@ -1,0 +1,29 @@
+version: 1
+
+builds:
+  - main: ./cmd/patch2pr
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}-{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      # https://github.com/goreleaser/goreleaser/issues/602
+      - none*
+
+release:
+  mode: keep-existing
