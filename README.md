@@ -16,7 +16,9 @@ that uses this library to apply it and create a pull request.
 
 ## Usage: CLI
 
-Install the CLI using `go install`:
+Pre-built binaries for common platforms are available on the [releases][] page.
+
+You can also install from source using `go install`:
 
     go install github.com/bluekeyes/patch2pr/cmd/patch2pr@latest
 
@@ -38,6 +40,8 @@ For example:
     $ patch2pr -repository bluekeyes/patch2pr /path/to/file.patch
 
 See the CLI help (`-h` or `-help`) or below for full details.
+
+[releases]: https://github.com/bluekeyes/patch2pr/releases
 
 ### Full Usage
 
