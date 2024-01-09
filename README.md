@@ -64,6 +64,10 @@ Usage: patch2pr [options] [patch]
 
   Override the commit message by using the -message flag.
 
+  With the -fork and -fork-repository flags, the command can submit the pull
+  request from a fork repository. If an existing fork does not exist, the
+  command creates a new fork, which may take up to five minutes.
+
 Options:
 
   -base-branch=branch    The branch to target with the pull request. If unset,

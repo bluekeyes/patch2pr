@@ -319,8 +319,11 @@ func prepareSourceRepo(ctx context.Context, client *github.Client, opts *Options
 }
 
 func createFork(ctx context.Context, client *github.Client, fork, parent patch2pr.Repository, isUserFork bool) error {
-	const pollInterval = 5 * time.Second
-	const maxWait = 1 * time.Minute
+	const (
+		initDelay = 1 * time.Second
+		maxDelay  = 30 * time.Second
+		maxWait   = 5 * time.Minute
+	)
 
 	organization := fork.Owner
 	if isUserFork {
@@ -338,27 +341,22 @@ func createFork(ctx context.Context, client *github.Client, fork, parent patch2p
 		return err
 	}
 
-	ticker := time.NewTicker(pollInterval)
-	defer ticker.Stop()
-
-	ctx, cancel := context.WithTimeout(ctx, maxWait)
-	defer cancel()
-
 	// Poll the new repo until the default branch exists, indicating it is ready to use
 	ref := "heads/" + repo.GetDefaultBranch()
-	for {
-		select {
-		case <-ticker.C:
-			if _, _, err := client.Git.GetRef(ctx, fork.Owner, fork.Name, ref); err == nil {
-				return nil
-			} else if !isNotFound(err) && !errors.Is(err, context.DeadlineExceeded) {
-				fmt.Fprintf(os.Stderr, "warning: error while waiting for fork to be ready, will try again: %v", err)
-			}
+	for delay, start := initDelay, time.Now(); time.Since(start) < maxWait; delay *= 2 {
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+		time.Sleep(delay)
 
-		case <-ctx.Done():
-			return fmt.Errorf("fork repository was not ready after %s", maxWait)
+		if _, _, err := client.Git.GetRef(ctx, fork.Owner, fork.Name, ref); err == nil {
+			return nil
+		} else if !isNotFound(err) {
+			fmt.Fprintf(os.Stderr, "warning: waiting for fork failed, but will try again: %v", err)
 		}
 	}
+
+	return fmt.Errorf("fork repository was not ready after %s", maxWait)
 }
 
 func splitMessage(m string) (title string, body string) {
@@ -463,6 +461,10 @@ Usage: patch2pr [options] [patch]
     GIT_COMMITER_DATE
 
   Override the commit message by using the -message flag.
+
+  With the -fork and -fork-repository flags, the command can submit the pull
+  request from a fork repository. If an existing fork does not exist, the
+  command creates a new fork, which may take up to five minutes.
 
 Options:
 
