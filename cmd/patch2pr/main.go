@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -22,23 +23,36 @@ import (
 
 func die(code int, err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
+
+	if isCode(err, http.StatusNotFound) {
+		fmt.Fprint(os.Stderr, `
+This may be because the repository does not exist or the token you are using
+does not have write permission. If submitting a patch to a repository where you
+do not have write access, consider using the -fork flag to submit the patch
+from a fork.
+`,
+		)
+	}
+
 	os.Exit(code)
 }
 
 type Options struct {
-	BaseBranch    string
-	Draft         bool
-	Force         bool
-	HeadBranch    string
-	OutputJSON    bool
-	Message       string
-	NoPullRequest bool
-	PatchBase     string
-	PullTitle     string
-	Repository    *patch2pr.Repository
-	GitHubToken   string
-	GitHubURL     *url.URL
-	PullBody      string
+	BaseBranch     string
+	Draft          bool
+	Force          bool
+	Fork           bool
+	ForkRepository *patch2pr.Repository
+	HeadBranch     string
+	OutputJSON     bool
+	Message        string
+	NoPullRequest  bool
+	PatchBase      string
+	PullTitle      string
+	Repository     *patch2pr.Repository
+	GitHubToken    string
+	GitHubURL      *url.URL
+	PullBody       string
 }
 
 func main() {
@@ -53,6 +67,8 @@ func main() {
 	fs.StringVar(&opts.BaseBranch, "base-branch", "", "base-branch")
 	fs.BoolVar(&opts.Draft, "draft", false, "draft")
 	fs.BoolVar(&opts.Force, "force", false, "force")
+	fs.BoolVar(&opts.Fork, "fork", false, "fork")
+	fs.Var(ForkValue{RepositoryValue{&opts.ForkRepository}, &opts.Fork}, "fork-repository", "fork-repository")
 	fs.StringVar(&opts.HeadBranch, "head-branch", "patch2pr", "head-branch")
 	fs.BoolVar(&opts.OutputJSON, "json", false, "json")
 	fs.StringVar(&opts.Message, "message", "", "message")
@@ -130,11 +146,11 @@ type PullRequestResult struct {
 }
 
 func execute(ctx context.Context, client *github.Client, patchFile string, opts *Options) (*Result, error) {
-	repo := *opts.Repository
+	targetRepo := *opts.Repository
 	patchBase, baseBranch, headBranch := opts.PatchBase, opts.BaseBranch, opts.HeadBranch
 
 	if patchBase == "" || (baseBranch == "" && !opts.NoPullRequest) {
-		r, _, err := client.Repositories.Get(ctx, repo.Owner, repo.Name)
+		r, _, err := client.Repositories.Get(ctx, targetRepo.Owner, targetRepo.Name)
 		if err != nil {
 			return nil, fmt.Errorf("get repository failed: %w", err)
 		}
@@ -147,14 +163,14 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 	}
 
 	if strings.HasPrefix(patchBase, "refs/") {
-		ref, _, err := client.Git.GetRef(ctx, repo.Owner, repo.Name, strings.TrimPrefix(patchBase, "refs/"))
+		ref, _, err := client.Git.GetRef(ctx, targetRepo.Owner, targetRepo.Name, strings.TrimPrefix(patchBase, "refs/"))
 		if err != nil {
 			return nil, fmt.Errorf("get ref for patch base %q failed: %w", patchBase, err)
 		}
 		patchBase = ref.GetObject().GetSHA()
 	}
 
-	commit, _, err := client.Git.GetCommit(ctx, repo.Owner, repo.Name, patchBase)
+	commit, _, err := client.Git.GetCommit(ctx, targetRepo.Owner, targetRepo.Name, patchBase)
 	if err != nil {
 		return nil, fmt.Errorf("get commit for %s failed: %w", patchBase, err)
 	}
@@ -184,7 +200,12 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		}
 	}
 
-	applier := patch2pr.NewApplier(client, repo, commit)
+	sourceRepo, err := prepareSourceRepo(ctx, client, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	applier := patch2pr.NewApplier(client, sourceRepo, commit)
 	for _, file := range files {
 		if _, err := applier.Apply(ctx, file); err != nil {
 			name := file.NewName
@@ -200,7 +221,7 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		return nil, fmt.Errorf("commit failed: %w", err)
 	}
 
-	ref := patch2pr.NewReference(client, repo, fmt.Sprintf("refs/heads/%s", headBranch))
+	ref := patch2pr.NewReference(client, sourceRepo, fmt.Sprintf("refs/heads/%s", headBranch))
 	if err := ref.Set(ctx, newCommit.GetSHA(), opts.Force); err != nil {
 		return nil, fmt.Errorf("set ref failed: %w", err)
 	}
@@ -222,12 +243,21 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 			body = opts.PullBody
 		}
 
-		if pr, err = ref.PullRequest(ctx, &github.NewPullRequest{
+		prSpec := &github.NewPullRequest{
 			Title: &title,
 			Body:  &body,
 			Base:  &baseBranch,
 			Draft: &opts.Draft,
-		}); err != nil {
+		}
+
+		if sourceRepo == targetRepo {
+			prSpec.Head = &headBranch
+		} else {
+			prSpec.Head = github.String(fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch))
+			prSpec.HeadRepo = &sourceRepo.Name
+		}
+
+		if pr, _, err = client.PullRequests.Create(ctx, targetRepo.Owner, targetRepo.Name, prSpec); err != nil {
 			return nil, fmt.Errorf("create pull request failed: %w", err)
 		}
 	}
@@ -243,6 +273,95 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		}
 	}
 	return res, nil
+}
+
+func prepareSourceRepo(ctx context.Context, client *github.Client, opts *Options) (patch2pr.Repository, error) {
+	source := patch2pr.Repository{}
+	target := *opts.Repository
+
+	if !opts.Fork {
+		// If we're not using a fork, the source is the same as the target
+		return target, nil
+	}
+
+	user, _, err := client.Users.Get(ctx, "")
+	if err != nil {
+		return source, fmt.Errorf("get user failed: %w", err)
+	}
+
+	if opts.ForkRepository != nil {
+		source = *opts.ForkRepository
+	} else {
+		source = patch2pr.Repository{
+			Owner: user.GetLogin(),
+			Name:  target.Name,
+		}
+	}
+
+	repo, _, err := client.Repositories.Get(ctx, source.Owner, source.Name)
+	switch {
+	case isCode(err, http.StatusNotFound):
+		isUserFork := user.GetLogin() == source.Owner
+		if err := createFork(ctx, client, source, target, isUserFork); err != nil {
+			return source, fmt.Errorf("forking repository failed: %w", err)
+		}
+
+	case err != nil:
+		return source, fmt.Errorf("get fork repository failed: %w", err)
+
+	default:
+		if !repo.GetFork() || repo.GetParent().GetFullName() != target.String() {
+			return source, fmt.Errorf("fork repository %q exists, but is not a fork of %q", source, target)
+		}
+	}
+
+	return source, nil
+}
+
+func createFork(ctx context.Context, client *github.Client, fork, parent patch2pr.Repository, isUserFork bool) error {
+	const (
+		initDelay = 1 * time.Second
+		maxDelay  = 30 * time.Second
+		maxWait   = 5 * time.Minute
+	)
+
+	organization := fork.Owner
+	if isUserFork {
+		organization = ""
+	}
+
+	repo, _, err := client.Repositories.CreateFork(ctx, parent.Owner, parent.Name, &github.RepositoryCreateForkOptions{
+		Organization:      organization,
+		Name:              fork.Name,
+		DefaultBranchOnly: true,
+	})
+
+	var aerr *github.AcceptedError
+	if err != nil && !errors.As(err, &aerr) {
+		return err
+	}
+	if repo.GetFullName() != fork.String() {
+		return fmt.Errorf("fork of %q already exists at %q, cannot create %q", parent, repo.GetFullName(), fork)
+	}
+
+	for delay, start := initDelay, time.Now(); time.Since(start) < maxWait; delay *= 2 {
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+		time.Sleep(delay)
+
+		if _, _, err := client.Repositories.ListCommits(ctx, fork.Owner, fork.Name, &github.CommitsListOptions{
+			ListOptions: github.ListOptions{
+				PerPage: 1,
+			},
+		}); err == nil {
+			return nil
+		} else if !isCode(err, http.StatusConflict) {
+			fmt.Fprintf(os.Stderr, "warning: waiting for fork failed, but will try again: %v", err)
+		}
+	}
+
+	return fmt.Errorf("fork repository was not ready after %s", maxWait)
 }
 
 func splitMessage(m string) (title string, body string) {
@@ -319,6 +438,11 @@ func dateFromEnv(dateType string) time.Time {
 	return time.Time{}
 }
 
+func isCode(err error, code int) bool {
+	var rerr *github.ErrorResponse
+	return errors.As(err, &rerr) && rerr.Response.StatusCode == code
+}
+
 func helpText() string {
 	help := `
 Usage: patch2pr [options] [patch]
@@ -343,45 +467,58 @@ Usage: patch2pr [options] [patch]
 
   Override the commit message by using the -message flag.
 
+  With the -fork and -fork-repository flags, the command can submit the pull
+  request from a fork repository. If an existing fork does not exist, the
+  command creates a new fork, which may take up to five minutes.
+
 Options:
 
-  -base-branch=branch  The branch to target with the pull request. If unset,
-                       use the repository's default branch.
+  -base-branch=branch    The branch to target with the pull request. If unset,
+                         use the repository's default branch.
 
-  -draft               Create a draft pull request.
+  -draft                 Create a draft pull request.
 
-  -force               Update the head branch even if it exists and is not a
-                       fast-forward.
+  -force                 Update the head branch even if it exists and is not a
+                         fast-forward.
 
-  -head-branch=branch  The branch to create or update with the new commit. If
-                       unset, use 'patch2pr'.
+  -fork                  Submit the pull request from a fork instead of pushing
+                         directly to the repository. With no other flags, use a
+                         fork in the current account with the same name as the
+                         target repository, creating the fork if it does not exist.
 
-  -json                Output information about the new commit and pull request
-                       in JSON format.
+  -fork-repository=repo  Submit the pull request from the named fork instead of
+                         pushing directly to the repository, creating the fork
+                         if it does not exist. Implies the -fork flag.
 
-  -message=message     Message for the commit. Overrides the patch header.
+  -head-branch=branch    The branch to create or update with the new commit. If
+                         unset, use 'patch2pr'.
 
-  -no-pull-request     Do not create a pull request after creating a commit.
+  -json                  Output information about the new commit and pull request
+                         in JSON format.
 
-  -patch-base=base     Base commit to apply the patch to. Can be a SHA1, a
-                       branch, or a tag. Branches and tags must start with
-                       'refs/heads/' or 'refs/tags/' respectively. If unset,
-                       use the repository's default branch.
+  -message=message       Message for the commit. Overrides the patch header.
 
-  -pull-body=body      The body for the pull request. If unset, use the body of
-                       the commit message.
+  -no-pull-request       Do not create a pull request after creating a commit.
 
-  -pull-title=title    The title for the pull request. If unset, use the title
-                       of the commit message.
+  -patch-base=base       Base commit to apply the patch to. Can be a SHA1, a
+                         branch, or a tag. Branches and tags must start with
+                         'refs/heads/' or 'refs/tags/' respectively. If unset,
+                         use the repository's default branch.
 
-  -repository=repo     Repository to apply the patch to in 'owner/name' format.
-                       Required.
+  -pull-body=body        The body for the pull request. If unset, use the body of
+                         the commit message.
 
-  -token=token         GitHub API token with 'repo' scope for authentication.
-                       If unset, use the value of the GITHUB_TOKEN environment
-                       variable.
+  -pull-title=title      The title for the pull request. If unset, use the title
+                         of the commit message.
 
-  -url=url             GitHub API URL. If unset, use https://api.github.com.
+  -repository=repo       Repository to apply the patch to in 'owner/name' format.
+                         Required.
+
+  -token=token           GitHub API token with 'repo' scope for authentication.
+                         If unset, use the value of the GITHUB_TOKEN environment
+                         variable.
+
+  -url=url               GitHub API URL. If unset, use https://api.github.com.
 
 `
 	return strings.TrimSpace(help)
