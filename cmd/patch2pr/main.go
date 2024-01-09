@@ -340,6 +340,9 @@ func createFork(ctx context.Context, client *github.Client, fork, parent patch2p
 	if err != nil && !errors.As(err, &aerr) {
 		return err
 	}
+	if repo.GetFullName() != fork.String() {
+		return fmt.Errorf("fork of %q already exists at %q, cannot create %q", parent, repo.GetFullName(), fork)
+	}
 
 	// Poll the new repo until the default branch exists, indicating it is ready to use
 	ref := "heads/" + repo.GetDefaultBranch()
