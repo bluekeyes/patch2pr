@@ -120,6 +120,8 @@ Options:
                          variable.
 
   -url=url               GitHub API URL. If unset, use https://api.github.com.
+
+  -v/-version            Print the version and exit.
 ```
 
 ## Usage: Library
