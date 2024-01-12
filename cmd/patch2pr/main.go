@@ -21,6 +21,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var (
+	version = "snapshot"
+)
+
 func die(code int, err error) {
 	fmt.Fprintln(os.Stderr, "error:", err)
 
@@ -80,12 +84,21 @@ func main() {
 	fs.StringVar(&opts.GitHubToken, "token", "", "token")
 	fs.Var(URLValue{&opts.GitHubURL}, "url", "url")
 
+	var printVersion bool
+	fs.BoolVar(&printVersion, "v", false, "version")
+	fs.BoolVar(&printVersion, "version", false, "version")
+
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		if err == flag.ErrHelp {
 			fmt.Fprintln(os.Stdout, helpText())
 			os.Exit(0)
 		}
 		die(2, err)
+	}
+
+	if printVersion {
+		fmt.Fprintln(os.Stdout, version)
+		os.Exit(0)
 	}
 
 	if opts.Repository == nil {
@@ -519,6 +532,8 @@ Options:
                          variable.
 
   -url=url               GitHub API URL. If unset, use https://api.github.com.
+
+  -v/-version            Print the version and exit.
 
 `
 	return strings.TrimSpace(help)
