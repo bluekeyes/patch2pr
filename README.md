@@ -31,8 +31,7 @@ The other required arguments are:
 - A GitHub token, set with the `-token` flag or in the `GITHUB_TOKEN`
   environment variable.
   - Classic tokens must have `repo` scope
-  - Fine-grained tokens must have read and write access to contents and pull
-    requests
+  - Fine-grained tokens must have read and write access to `administration` (for creating forks), `contents` (for committing changes), and `pull requests`
 
 For example:
 
