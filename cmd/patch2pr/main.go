@@ -121,14 +121,14 @@ func main() {
 	client := github.NewClient(tc)
 	client.BaseURL = opts.GitHubURL
 
-	var patchFile string
+	var patchFiles []string
 	if fs.NArg() == 0 {
-		patchFile = "-"
+		patchFiles = []string{"-"}
 	} else {
-		patchFile = fs.Arg(0)
+		patchFiles = fs.Args()
 	}
 
-	res, err := execute(ctx, client, patchFile, &opts)
+	res, err := execute(ctx, client, patchFiles, &opts)
 	if err != nil {
 		die(1, err)
 	}
@@ -147,6 +147,13 @@ func main() {
 	}
 }
 
+type Patch struct {
+	path     string
+	files    []*gitdiff.File
+	preamble string
+	header   *gitdiff.PatchHeader
+}
+
 type Result struct {
 	Commit      string             `json:"commit"`
 	Tree        string             `json:"tree"`
@@ -158,7 +165,36 @@ type PullRequestResult struct {
 	URL    string `json:"url"`
 }
 
-func execute(ctx context.Context, client *github.Client, patchFile string, opts *Options) (*Result, error) {
+func parse(patchFile string) (*Patch, error) {
+	var r io.ReadCloser
+	if patchFile == "-" {
+		r = os.Stdin
+	} else {
+		f, err := os.Open(patchFile)
+		if err != nil {
+			return nil, fmt.Errorf("open patch file failed: %w", err)
+		}
+		r = f
+	}
+
+	files, preamble, err := gitdiff.Parse(r)
+	if err != nil {
+		return nil, fmt.Errorf("parsing patch failed: %w", err)
+	}
+	_ = r.Close()
+
+	var header *gitdiff.PatchHeader
+	if len(preamble) > 0 {
+		header, err = gitdiff.ParsePatchHeader(preamble)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: invalid patch header: %v", err)
+		}
+	}
+
+	return &Patch{patchFile, files, preamble, header}, nil
+}
+
+func execute(ctx context.Context, client *github.Client, patchFiles []string, opts *Options) (*Result, error) {
 	targetRepo := *opts.Repository
 	patchBase, baseBranch, headBranch := opts.PatchBase, opts.BaseBranch, opts.HeadBranch
 
@@ -188,29 +224,13 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		return nil, fmt.Errorf("get commit for %s failed: %w", patchBase, err)
 	}
 
-	var r io.ReadCloser
-	if patchFile == "-" {
-		r = os.Stdin
-	} else {
-		f, err := os.Open(patchFile)
+	var patches []Patch
+	for _, patchFile := range patchFiles {
+		patch, err := parse(patchFile)
 		if err != nil {
-			return nil, fmt.Errorf("open patch file failed: %w", err)
+			return nil, err
 		}
-		r = f
-	}
-
-	files, preamble, err := gitdiff.Parse(r)
-	if err != nil {
-		return nil, fmt.Errorf("parsing patch failed: %w", err)
-	}
-	_ = r.Close()
-
-	var header *gitdiff.PatchHeader
-	if len(preamble) > 0 {
-		header, err = gitdiff.ParsePatchHeader(preamble)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: invalid patch header: %v", err)
-		}
+		patches = append(patches, *patch)
 	}
 
 	sourceRepo, err := prepareSourceRepo(ctx, client, opts)
@@ -218,20 +238,23 @@ func execute(ctx context.Context, client *github.Client, patchFile string, opts 
 		return nil, err
 	}
 
-	applier := patch2pr.NewApplier(client, sourceRepo, commit)
-	for _, file := range files {
-		if _, err := applier.Apply(ctx, file); err != nil {
-			name := file.NewName
-			if name == "" {
-				name = file.OldName
+	newCommit := commit
+	for _, patch := range patches {
+		applier := patch2pr.NewApplier(client, sourceRepo, newCommit)
+		for _, file := range patch.files {
+			if _, err := applier.Apply(ctx, file); err != nil {
+				name := file.NewName
+				if name == "" {
+					name = file.OldName
+				}
+				return nil, fmt.Errorf("apply failed: %s: %w", name, err)
 			}
-			return nil, fmt.Errorf("apply failed: %s: %w", name, err)
 		}
-	}
 
-	newCommit, err := applier.Commit(ctx, nil, fillHeader(header, patchFile, opts.Message))
-	if err != nil {
-		return nil, fmt.Errorf("commit failed: %w", err)
+		newCommit, err = applier.Commit(ctx, nil, fillHeader(patch.header, patch.path, opts.Message))
+		if err != nil {
+			return nil, fmt.Errorf("commit failed: %w", err)
+		}
 	}
 
 	ref := patch2pr.NewReference(client, sourceRepo, fmt.Sprintf("refs/heads/%s", headBranch))
@@ -458,7 +481,7 @@ func isCode(err error, code int) bool {
 
 func helpText() string {
 	help := `
-Usage: patch2pr [options] [patch]
+Usage: patch2pr [options] [patch...]
 
   Create a GitHub pull request from a patch file
 

@@ -45,7 +45,7 @@ See the CLI help (`-h` or `-help`) or below for full details.
 ### Full Usage
 
 ```
-Usage: patch2pr [options] [patch]
+Usage: patch2pr [options] [patch...]
 
   Create a GitHub pull request from a patch file
 
