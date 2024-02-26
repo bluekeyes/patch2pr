@@ -3,10 +3,12 @@ package main
 import (
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 )
 
-func TestMBoxMessageReader(t *testing.T) {
+func TestMBoxMessageReader_mboxFile(t *testing.T) {
 	f, err := os.Open("testdata/test.mbox")
 	if err != nil {
 		t.Fatalf("error opening file: %v", err)
@@ -24,9 +26,7 @@ func TestMBoxMessageReader(t *testing.T) {
 		msgs = append(msgs, string(b))
 	}
 
-	if len(msgs) != 5 {
-		t.Fatalf("incorrect number of messages: expected %d, got %d", 5, len(msgs))
-	}
+	assertMsgCount(t, msgs, 5)
 
 	assertMsgContent(t, msgs, 0,
 		`From 5255ca3071e33871ad7c23de1a3962f19b215f74 Mon Sep 17 00:00:00 2001
@@ -60,6 +60,44 @@ It has an mbox From header in the middle of a line and also has an email From: h
 This is the last message in the file.
 `,
 	)
+}
+
+func TestMBoxMessageReader_regularFile(t *testing.T) {
+	f, err := os.Open("testdata/test.txt")
+	if err != nil {
+		t.Fatalf("error opening file: %v", err)
+	}
+	defer f.Close()
+
+	mbr := mboxMessageReader{r: f}
+
+	var msgs []string
+	for i := 0; mbr.Next(); i++ {
+		b, err := io.ReadAll(&mbr)
+		if err != nil {
+			t.Fatalf("unexpected error reading message %d: %v", i+1, err)
+		}
+		msgs = append(msgs, string(b))
+	}
+
+	assertMsgCount(t, msgs, 1)
+
+	expected, err := os.ReadFile("testdata/test.txt")
+	if err != nil {
+		t.Fatalf("error reading file: %v", err)
+	}
+	assertMsgContent(t, msgs, 0, string(expected))
+}
+
+func assertMsgCount(t *testing.T, msgs []string, count int) {
+	if len(msgs) != count {
+		msgStrs := make([]string, len(msgs))
+		for _, m := range msgs {
+			msgStrs = append(msgStrs, "  "+strconv.Quote(m))
+		}
+
+		t.Fatalf("incorrect number of messages: expected 1, got %d\nmessages: [%s,\n]", len(msgs), strings.Join(msgStrs, ",\n"))
+	}
 }
 
 func assertMsgContent(t *testing.T, msgs []string, i int, expected string) {

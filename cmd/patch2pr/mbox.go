@@ -9,13 +9,23 @@ var (
 	mboxHeader = []byte("From ")
 )
 
+type fileType int
+
+const (
+	fileUnknown fileType = iota
+	filePlain
+	fileMBox
+)
+
 type mboxMessageReader struct {
 	r    io.Reader
 	next bytes.Buffer
 
 	headers int
-	isLine  bool
-	isEOF   bool
+	ftype   fileType
+
+	isLineStart bool
+	isEOF       bool
 }
 
 func (r *mboxMessageReader) Next() bool {
@@ -24,7 +34,7 @@ func (r *mboxMessageReader) Next() bool {
 	}
 
 	r.headers = 0
-	r.isLine = true
+	r.isLineStart = true
 	return true
 }
 
@@ -43,26 +53,42 @@ func (r *mboxMessageReader) Read(p []byte) (n int, err error) {
 	}
 	n += bufn
 
-	for i := 0; i < n; i++ {
-		if r.isLine {
-			if matchLen := matchMBoxHeader(p[i:n]); matchLen > 0 {
-				if matchLen == len(mboxHeader) {
-					r.headers++
-				}
-				if r.headers > 1 || matchLen < len(mboxHeader) {
-					r.next.Write(p[i:n])
-					n = i
-					break
-				}
-			}
-		}
-		r.isLine = p[i] == '\n'
+	if r.ftype == fileUnknown || r.ftype == fileMBox {
+		n = r.scanForHeader(p, n)
 	}
 
 	if err == io.EOF {
 		r.isEOF = true
 	}
 	return n, err
+}
+
+func (r *mboxMessageReader) scanForHeader(p []byte, n int) int {
+	for i := 0; i < n; i++ {
+		if isSpace(p[i]) {
+			r.isLineStart = p[i] == '\n'
+			continue
+		}
+
+		if r.isLineStart {
+			if matchLen := matchMBoxHeader(p[i:n]); matchLen > 0 {
+				if matchLen == len(mboxHeader) {
+					r.ftype = fileMBox
+					r.headers++
+				}
+				if r.headers > 1 || matchLen < len(mboxHeader) {
+					r.next.Write(p[i:n])
+					return i
+				}
+			}
+		}
+
+		if r.ftype == fileUnknown {
+			r.ftype = filePlain
+			break
+		}
+	}
+	return n
 }
 
 func matchMBoxHeader(b []byte) (n int) {
@@ -73,4 +99,12 @@ func matchMBoxHeader(b []byte) (n int) {
 		n++
 	}
 	return n
+}
+
+func isSpace(b byte) bool {
+	switch b {
+	case ' ', '\t', '\r', '\n':
+		return true
+	}
+	return false
 }
