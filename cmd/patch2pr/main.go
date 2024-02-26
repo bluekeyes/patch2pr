@@ -148,10 +148,9 @@ func main() {
 }
 
 type Patch struct {
-	path     string
-	files    []*gitdiff.File
-	preamble string
-	header   *gitdiff.PatchHeader
+	path   string
+	files  []*gitdiff.File
+	header *gitdiff.PatchHeader
 }
 
 type Result struct {
@@ -165,7 +164,7 @@ type PullRequestResult struct {
 	URL    string `json:"url"`
 }
 
-func parse(patchFile string) (*Patch, error) {
+func parse(patchFile string) ([]Patch, error) {
 	var r io.ReadCloser
 	if patchFile == "-" {
 		r = os.Stdin
@@ -176,22 +175,28 @@ func parse(patchFile string) (*Patch, error) {
 		}
 		r = f
 	}
+	defer closeQuitely(r)
 
-	files, preamble, err := gitdiff.Parse(r)
-	if err != nil {
-		return nil, fmt.Errorf("parsing patch failed: %w", err)
-	}
-	_ = r.Close()
+	mbr := mboxMessageReader{r: r}
 
-	var header *gitdiff.PatchHeader
-	if len(preamble) > 0 {
-		header, err = gitdiff.ParsePatchHeader(preamble)
+	var patches []Patch
+	for mbr.Next() {
+		files, preamble, err := gitdiff.Parse(&mbr)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: invalid patch header: %v", err)
+			return nil, fmt.Errorf("parsing patch failed: %w", err)
 		}
-	}
 
-	return &Patch{patchFile, files, preamble, header}, nil
+		var header *gitdiff.PatchHeader
+		if len(preamble) > 0 {
+			header, err = gitdiff.ParsePatchHeader(preamble)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: invalid patch header: %v", err)
+			}
+		}
+
+		patches = append(patches, Patch{patchFile, files, header})
+	}
+	return patches, nil
 }
 
 func execute(ctx context.Context, client *github.Client, patchFiles []string, opts *Options) (*Result, error) {
@@ -224,13 +229,13 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 		return nil, fmt.Errorf("get commit for %s failed: %w", patchBase, err)
 	}
 
-	var patches []Patch
+	var allPatches []Patch
 	for _, patchFile := range patchFiles {
-		patch, err := parse(patchFile)
+		patches, err := parse(patchFile)
 		if err != nil {
 			return nil, err
 		}
-		patches = append(patches, *patch)
+		allPatches = append(allPatches, patches...)
 	}
 
 	sourceRepo, err := prepareSourceRepo(ctx, client, opts)
@@ -238,9 +243,10 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 		return nil, err
 	}
 
-	newCommit := commit
-	for _, patch := range patches {
-		applier := patch2pr.NewApplier(client, sourceRepo, newCommit)
+	applier := patch2pr.NewApplier(client, sourceRepo, commit)
+
+	var newCommit *github.Commit
+	for _, patch := range allPatches {
 		for _, file := range patch.files {
 			if _, err := applier.Apply(ctx, file); err != nil {
 				name := file.NewName
@@ -479,15 +485,21 @@ func isCode(err error, code int) bool {
 	return errors.As(err, &rerr) && rerr.Response.StatusCode == code
 }
 
+func closeQuitely(c io.Closer) {
+	_ = c.Close()
+}
+
 func helpText() string {
 	help := `
 Usage: patch2pr [options] [patch...]
 
   Create a GitHub pull request from a patch file
 
-  This command parses a patch, applies it, and creates a pull request with the
-  result. It does not clone the repository to apply the patch. If no patch file
-  is given, the command reads the patch from standard input.
+  This command parses one or more patches, applies them, and creates a pull
+  request with the result. It does not clone the repository. If no patch files
+  are given, the command reads the patches from standard input. Each file can
+  contain a single patch or multiple patches in the mbox format produced by 'git
+  format-patch --stdout' or GitHub's patch view.
 
   By default, patch2pr uses the patch header for author and committer
   information, falling back to the authenticated GitHub user if the headers are

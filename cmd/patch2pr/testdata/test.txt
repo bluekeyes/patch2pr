@@ -1,0 +1,9 @@
+This is a regular file that doesn't look like an mbox file at all
+The next line delibrately contains an mbox header that should not do anything.
+
+From this point on the file remains a basic text file.
+
+This is not another message.
+It is part of the original message.
+
+From everything that's happened so far, this is the end.

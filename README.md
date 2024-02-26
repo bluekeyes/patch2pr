@@ -49,9 +49,11 @@ Usage: patch2pr [options] [patch...]
 
   Create a GitHub pull request from a patch file
 
-  This command parses a patch, applies it, and creates a pull request with the
-  result. It does not clone the repository to apply the patch. If no patch file
-  is given, the command reads the patch from standard input.
+  This command parses one or more patches, applies them, and creates a pull
+  request with the result. It does not clone the repository. If no patch files
+  are given, the command reads the patches from standard input. Each file can
+  contain a single patch or multiple patches in the mbox format produced by 'git
+  format-patch --stdout' or GitHub's patch view.
 
   By default, patch2pr uses the patch header for author and committer
   information, falling back to the authenticated GitHub user if the headers are
