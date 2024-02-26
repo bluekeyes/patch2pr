@@ -29,7 +29,7 @@ type mboxMessageReader struct {
 }
 
 func (r *mboxMessageReader) Next() bool {
-	if r.isEOF {
+	if r.isEOF && r.bufferEmpty() {
 		return false
 	}
 
@@ -39,27 +39,37 @@ func (r *mboxMessageReader) Next() bool {
 }
 
 func (r *mboxMessageReader) Read(p []byte) (n int, err error) {
+	// TODO(bkeyes): This is broken if it is only called with len(p) < len(mboxHeader).
+	// This shouldn't be a problem in practice because go-gitdiff always wraps
+	// the input reader in a bufio.Reader, which uses a large enough buffer.
+
 	if len(p) == 0 {
 		return 0, nil
 	}
-	if r.isEOF || r.headers > 1 {
+	if r.headers > 1 || (r.isEOF && r.bufferEmpty()) {
 		return 0, io.EOF
 	}
 
-	bufn, _ := r.next.Read(p)
-	if bufn < len(p) {
-		n, err = r.r.Read(p[bufn:])
-		r.next.Reset()
+	if !r.bufferEmpty() {
+		n, _ = r.next.Read(p)
+		if r.bufferEmpty() {
+			r.next.Reset()
+		}
 	}
-	n += bufn
+	if n < len(p) {
+		var nn int
+		nn, err = r.r.Read(p[n:])
+		if err == io.EOF {
+			r.isEOF = true
+			err = nil
+		}
+		n += nn
+	}
 
 	if r.ftype == fileUnknown || r.ftype == fileMBox {
 		n = r.scanForHeader(p, n)
 	}
 
-	if err == io.EOF {
-		r.isEOF = true
-	}
 	return n, err
 }
 
@@ -89,6 +99,10 @@ func (r *mboxMessageReader) scanForHeader(p []byte, n int) int {
 		}
 	}
 	return n
+}
+
+func (r *mboxMessageReader) bufferEmpty() bool {
+	return r.next.Len() == 0
 }
 
 func matchMBoxHeader(b []byte) (n int) {

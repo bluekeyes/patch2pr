@@ -181,7 +181,7 @@ func parse(patchFile string) ([]Patch, error) {
 
 	var patches []Patch
 	for mbr.Next() {
-		files, preamble, err := gitdiff.Parse(r)
+		files, preamble, err := gitdiff.Parse(&mbr)
 		if err != nil {
 			return nil, fmt.Errorf("parsing patch failed: %w", err)
 		}
