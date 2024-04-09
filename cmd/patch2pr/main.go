@@ -17,8 +17,8 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr"
+	"github.com/bluekeyes/patch2pr/internal"
 	"github.com/google/go-github/v60/github"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -113,10 +113,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: opts.GitHubToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
+	tc := internal.NewTokenClient(opts.GitHubToken)
 
 	client := github.NewClient(tc)
 	client.BaseURL = opts.GitHubURL

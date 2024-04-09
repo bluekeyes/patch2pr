@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
+	"github.com/bluekeyes/patch2pr/internal"
 	"github.com/google/go-github/v60/github"
 	"github.com/shurcooL/githubv4"
-	"golang.org/x/oauth2"
 )
 
 const (
@@ -236,9 +236,7 @@ func prepareTestContext(t *testing.T) *TestContext {
 	}
 
 	ctx := context.Background()
-	httpClient := oauth2.NewClient(ctx, oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: token},
-	))
+	httpClient := internal.NewTokenClient(token)
 
 	tctx := TestContext{
 		Context:  ctx,
