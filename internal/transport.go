@@ -13,6 +13,8 @@ func (trt *tokenRoundTripper) RoundTrip(r *http.Request) (*http.Response, error)
 	return trt.base.RoundTrip(rCopy)
 }
 
+// NewTokenClient returns an [http.Client] that sets the bearer token in the
+// Authorization header of all requests.
 func NewTokenClient(token string) *http.Client {
 	return &http.Client{
 		Transport: &tokenRoundTripper{
