@@ -3,7 +3,7 @@ module github.com/bluekeyes/patch2pr
 go 1.21
 
 require (
-	github.com/bluekeyes/go-gitdiff v0.7.2
+	github.com/bluekeyes/go-gitdiff v0.7.3
 	github.com/google/go-github/v61 v61.0.0
 	github.com/shurcooL/githubv4 v0.0.0-20210922025249-6831e00d857f
 )
