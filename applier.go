@@ -1,3 +1,4 @@
+// Package patch2pr converts Git patches in to GitHub pull requests.
 package patch2pr
 
 import (
