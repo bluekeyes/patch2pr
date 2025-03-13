@@ -1,6 +1,6 @@
 module github.com/bluekeyes/patch2pr
 
-go 1.22.0
+go 1.23.0
 
 require (
 	github.com/bluekeyes/go-gitdiff v0.8.1
