@@ -1,52 +1,54 @@
+version: "2"
+
 run:
   tests: false
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gofmt
-    - goimports
     - govet
     - ineffassign
     - misspell
     - revive
-    - typecheck
     - unconvert
     - unused
-
-issues:
-  exclude-use-default: false
-  exclude-rules:
-    - path: cmd/patch2pr/
-      text: "should have( a package)? comment"
-    - path: internal/
-      text: "should have( a package)? comment"
-
-linters-settings:
-  errcheck:
-    exclude-functions:
-      - fmt.Fprintln(os.Stdout)
-  goimports:
-    local-prefixes: github.com/bluekeyes/patch2pr
-  revive:
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprintln(os.Stdout)
+    revive:
+      rules:
+        - name: context-keys-type
+        - name: time-naming
+        - name: var-declaration
+        - name: unexported-return
+        - name: errorf
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: indent-error-flow
+  exclusions:
     rules:
-      # enable all rules from golint
-      - name: context-keys-type
-      - name: time-naming
-      - name: var-declaration
-      - name: unexported-return
-      - name: errorf
-      - name: blank-imports
-      - name: context-as-argument
-      - name: dot-imports
-      - name: error-return
-      - name: error-strings
-      - name: error-naming
-      - name: exported
-      - name: increment-decrement
-      - name: var-naming
-      - name: package-comments
-      - name: range
-      - name: receiver-naming
-      - name: indent-error-flow
+      - path: cmd/patch2pr/
+        text: "should have( a package)? comment"
+      - path: internal/
+        text: "should have( a package)? comment"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/bluekeyes/patch2pr
