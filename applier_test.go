@@ -15,7 +15,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr/internal"
-	"github.com/google/go-github/v74/github"
+	"github.com/google/go-github/v75/github"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -279,7 +279,7 @@ func createBranch(t *testing.T, tctx *TestContext) {
 
 		if strings.HasSuffix(d.Name(), ".bin") {
 			c := base64.StdEncoding.EncodeToString(content)
-			blob, _, err := tctx.Client.Git.CreateBlob(tctx, tctx.Repo.Owner, tctx.Repo.Name, &github.Blob{
+			blob, _, err := tctx.Client.Git.CreateBlob(tctx, tctx.Repo.Owner, tctx.Repo.Name, github.Blob{
 				Encoding: github.String("base64"),
 				Content:  &c,
 			})
@@ -308,11 +308,12 @@ func createBranch(t *testing.T, tctx *TestContext) {
 		t.Fatalf("error getting recursive tree: %v", err)
 	}
 
-	commit := &github.Commit{
+	commitToCreate := github.Commit{
 		Message: github.String("Base commit for test"),
 		Tree:    tree,
 	}
-	commit, _, err = tctx.Client.Git.CreateCommit(tctx, tctx.Repo.Owner, tctx.Repo.Name, commit, nil)
+
+	commit, _, err := tctx.Client.Git.CreateCommit(tctx, tctx.Repo.Owner, tctx.Repo.Name, commitToCreate, nil)
 	if err != nil {
 		t.Fatalf("error creating commit: %v", err)
 	}
@@ -320,11 +321,9 @@ func createBranch(t *testing.T, tctx *TestContext) {
 	tctx.BaseCommit = commit
 	tctx.BaseTree = fullTree
 
-	if _, _, err := tctx.Client.Git.CreateRef(tctx, tctx.Repo.Owner, tctx.Repo.Name, &github.Reference{
-		Ref: github.String(tctx.Branch(BaseBranch)),
-		Object: &github.GitObject{
-			SHA: commit.SHA,
-		},
+	if _, _, err := tctx.Client.Git.CreateRef(tctx, tctx.Repo.Owner, tctx.Repo.Name, github.CreateRef{
+		Ref: tctx.Branch(BaseBranch),
+		SHA: commit.GetSHA(),
 	}); err != nil {
 		t.Fatalf("error creating ref: %v", err)
 	}

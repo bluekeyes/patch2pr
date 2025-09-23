@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v74/github"
+	"github.com/google/go-github/v75/github"
 )
 
 // Reference is a named reference in a repository.
@@ -48,20 +48,16 @@ func (r *Reference) Set(ctx context.Context, sha string, force bool) error {
 	}
 
 	if exists {
-		if _, _, err := r.client.Git.UpdateRef(ctx, r.owner, r.repo, &github.Reference{
-			Ref: github.String(r.ref),
-			Object: &github.GitObject{
-				SHA: github.String(sha),
-			},
-		}, force); err != nil {
+		if _, _, err := r.client.Git.UpdateRef(ctx, r.owner, r.repo, r.ref, github.UpdateRef{
+			SHA:   sha,
+			Force: github.Ptr(force),
+		}); err != nil {
 			return fmt.Errorf("update ref failed: %w", err)
 		}
 	} else {
-		if _, _, err := r.client.Git.CreateRef(ctx, r.owner, r.repo, &github.Reference{
-			Ref: github.String(r.ref),
-			Object: &github.GitObject{
-				SHA: github.String(sha),
-			},
+		if _, _, err := r.client.Git.CreateRef(ctx, r.owner, r.repo, github.CreateRef{
+			Ref: r.ref,
+			SHA: sha,
 		}); err != nil {
 			return fmt.Errorf("create ref failed: %w", err)
 		}
