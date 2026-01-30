@@ -15,7 +15,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr/internal"
-	"github.com/google/go-github/v81/github"
+	"github.com/google/go-github/v82/github"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -335,9 +335,7 @@ func cleanupBranches(t *testing.T, tctx *TestContext) {
 		return
 	}
 
-	refs, _, err := tctx.Client.Git.ListMatchingRefs(tctx, tctx.Repo.Owner, tctx.Repo.Name, &github.ReferenceListOptions{
-		Ref: fmt.Sprintf("heads/test/%s/", tctx.ID),
-	})
+	refs, _, err := tctx.Client.Git.ListMatchingRefs(tctx, tctx.Repo.Owner, tctx.Repo.Name, fmt.Sprintf("heads/test/%s/", tctx.ID))
 	if err != nil {
 		t.Logf("WARNING: failed to list refs; skipping cleanup: %v", err)
 		return
