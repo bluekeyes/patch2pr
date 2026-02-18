@@ -74,7 +74,7 @@ func (r *mboxMessageReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *mboxMessageReader) scanForHeader(p []byte, n int) int {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if isSpace(p[i]) {
 			r.isLineStart = p[i] == '\n'
 			continue

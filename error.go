@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func unsupported(msg string, args ...interface{}) error {
+func unsupported(msg string, args ...any) error {
 	return unsupportedErr{reason: fmt.Sprintf(msg, args...)}
 }
 
