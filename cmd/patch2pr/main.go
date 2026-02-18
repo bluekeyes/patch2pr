@@ -214,8 +214,8 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 		}
 	}
 
-	if strings.HasPrefix(patchBase, "refs/") {
-		ref, _, err := client.Git.GetRef(ctx, targetRepo.Owner, targetRepo.Name, strings.TrimPrefix(patchBase, "refs/"))
+	if baseRef, ok := strings.CutPrefix(patchBase, "refs/"); ok {
+		ref, _, err := client.Git.GetRef(ctx, targetRepo.Owner, targetRepo.Name, baseRef)
 		if err != nil {
 			return nil, fmt.Errorf("get ref for patch base %q failed: %w", patchBase, err)
 		}

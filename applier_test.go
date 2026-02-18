@@ -123,8 +123,8 @@ func assertPatchResult(t *testing.T, tctx *TestContext, name string, c *github.C
 		}
 
 		relpath := filepath.ToSlash(strings.TrimPrefix(path, root))
-		if strings.HasSuffix(relpath, DeletedExt) {
-			delete(expected, strings.TrimSuffix(relpath, DeletedExt))
+		if path, ok := strings.CutSuffix(relpath, DeletedExt); ok {
+			delete(expected, path)
 			return nil
 		}
 

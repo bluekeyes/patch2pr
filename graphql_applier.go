@@ -200,7 +200,7 @@ func (a *GraphQLApplier) getContent(ctx context.Context, filePath string) ([]byt
 			} `graphql:"object(expression: $expr)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"owner": githubv4.String(a.owner),
 		"name":  githubv4.String(a.repo),
 		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, filePath)),
@@ -249,7 +249,7 @@ func (a *GraphQLApplier) getMode(ctx context.Context, filePath string) (os.FileM
 			} `graphql:"object(expression: $expr)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
-	vars := map[string]interface{}{
+	vars := map[string]any{
 		"owner": githubv4.String(a.owner),
 		"name":  githubv4.String(a.repo),
 		"expr":  githubv4.String(fmt.Sprintf("%s:%s", a.commit, treePath(filePath))),
