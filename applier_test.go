@@ -15,7 +15,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr/internal"
-	"github.com/google/go-github/v85/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -238,11 +238,16 @@ func prepareTestContext(t *testing.T) *TestContext {
 	ctx := context.Background()
 	httpClient := internal.NewTokenClient(token)
 
+	client, err := github.NewClient(github.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("Error creating GitHub client: %v", err)
+	}
+
 	tctx := TestContext{
 		Context:  ctx,
 		ID:       id,
 		Repo:     repo,
-		Client:   github.NewClient(httpClient),
+		Client:   client,
 		V4Client: githubv4.NewClient(httpClient),
 	}
 	return &tctx
