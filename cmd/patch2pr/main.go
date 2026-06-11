@@ -10,7 +10,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -56,14 +55,12 @@ type Options struct {
 	PullTitle      string
 	Repository     *patch2pr.Repository
 	GitHubToken    string
-	GitHubURL      *url.URL
+	GitHubURL      string
 	PullBody       string
 }
 
 func main() {
-	opts := Options{
-		GitHubURL: &url.URL{Scheme: "https", Host: "api.github.com", Path: "/"},
-	}
+	var opts Options
 
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	fs.SetOutput(ioutil.Discard)
@@ -83,7 +80,7 @@ func main() {
 	fs.StringVar(&opts.PullTitle, "pull-title", "", "pull-title")
 	fs.Var(RepositoryValue{&opts.Repository}, "repository", "repository")
 	fs.StringVar(&opts.GitHubToken, "token", "", "token")
-	fs.Var(URLValue{&opts.GitHubURL}, "url", "url")
+	fs.StringVar(&opts.GitHubURL, "url", "https://api.github.com/", "url")
 
 	var printVersion bool
 	fs.BoolVar(&printVersion, "v", false, "version")
@@ -116,8 +113,13 @@ func main() {
 	ctx := context.Background()
 	tc := internal.NewTokenClient(opts.GitHubToken)
 
-	client := github.NewClient(tc)
-	client.BaseURL = opts.GitHubURL
+	client, err := github.NewClient(
+		github.WithHTTPClient(tc),
+		github.WithURLs(&opts.GitHubURL, nil),
+	)
+	if err != nil {
+		die(1, fmt.Errorf("creating GitHub client failed: %w", err))
+	}
 
 	var patchFiles []string
 	if fs.NArg() == 0 {
