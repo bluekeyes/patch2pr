@@ -3,7 +3,24 @@ package patch2pr
 import (
 	"errors"
 	"fmt"
+
+	"github.com/bluekeyes/go-gitdiff/gitdiff"
 )
+
+var (
+	ErrConflict = errors.New("conflict prevented applying patch")
+
+	ErrNewFileAlreadyExists = fmt.Errorf("%w: existing entry for new file", ErrConflict)
+	ErrNoSuchFileToDelete   = fmt.Errorf("%w: missing entry for deleted file", ErrConflict)
+	ErrNoSuchFileToModify   = fmt.Errorf("%w: no entry for modified file", ErrConflict)
+)
+
+func wrapGitdiffApplyError(err error) error {
+	if errors.Is(err, &gitdiff.Conflict{}) {
+		return fmt.Errorf("%w: gitdiff apply failed: %w", ErrConflict, err)
+	}
+	return fmt.Errorf("gitdiff apply failed: %w", err)
+}
 
 func unsupported(msg string, args ...any) error {
 	return unsupportedErr{reason: fmt.Sprintf(msg, args...)}

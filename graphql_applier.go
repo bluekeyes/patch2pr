@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -122,12 +121,12 @@ func (a *GraphQLApplier) applyCreate(ctx context.Context, f *gitdiff.File) error
 		return err
 	}
 	if exists {
-		return errors.New("existing entry for new file")
+		return ErrNewFileAlreadyExists
 	}
 
 	var b bytes.Buffer
 	if err := gitdiff.Apply(&b, bytes.NewReader(nil), f); err != nil {
-		return err
+		return wrapGitdiffApplyError(err)
 	}
 
 	a.changes[f.NewName] = pendingChange{Content: b.Bytes()}
@@ -143,11 +142,11 @@ func (a *GraphQLApplier) applyDelete(ctx context.Context, f *gitdiff.File) error
 	if !exists {
 		// because the rest of application is strict, return an error if the
 		// file was already deleted, since it indicates a conflict of some kind
-		return errors.New("missing entry for deleted file")
+		return ErrNoSuchFileToDelete
 	}
 
 	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
-		return err
+		return wrapGitdiffApplyError(err)
 	}
 
 	a.changes[f.OldName] = pendingChange{IsDelete: true}
@@ -160,13 +159,13 @@ func (a *GraphQLApplier) applyModify(ctx context.Context, f *gitdiff.File) error
 		return err
 	}
 	if !exists {
-		return errors.New("no entry for modified file")
+		return ErrNoSuchFileToModify
 	}
 
 	if len(f.TextFragments) > 0 || f.BinaryFragment != nil {
 		var b bytes.Buffer
 		if err := gitdiff.Apply(&b, bytes.NewReader(data), f); err != nil {
-			return err
+			return wrapGitdiffApplyError(err)
 		}
 		data = b.Bytes()
 	}

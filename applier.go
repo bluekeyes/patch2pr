@@ -91,7 +91,7 @@ func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, err
 	}
 	if exists {
-		return nil, errors.New("existing entry for new file")
+		return nil, ErrNewFileAlreadyExists
 	}
 
 	c, err := base64Apply(nil, f)
@@ -119,7 +119,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 	if !exists {
 		// because the rest of application is strict, return an error if the
 		// file was already deleted, since it indicates a conflict of some kind
-		return nil, errors.New("missing entry for deleted file")
+		return nil, ErrNoSuchFileToDelete
 	}
 
 	data, _, err := a.client.Git.GetBlobRaw(ctx, a.owner, a.repo, entry.GetSHA())
@@ -128,7 +128,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 	}
 
 	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
-		return nil, err
+		return nil, wrapGitdiffApplyError(err)
 	}
 
 	path := f.OldName
@@ -147,7 +147,7 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.New("no entry for modified file")
+		return nil, ErrNoSuchFileToModify
 	}
 
 	path := f.NewName
@@ -346,7 +346,7 @@ func base64Apply(data []byte, f *gitdiff.File) (string, error) {
 
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
 	if err := gitdiff.Apply(enc, bytes.NewReader(data), f); err != nil {
-		return "", err
+		return "", wrapGitdiffApplyError(err)
 	}
 	if err := enc.Close(); err != nil {
 		return "", fmt.Errorf("base64 encoding failed: %w", err)
