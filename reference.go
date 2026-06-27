@@ -75,7 +75,7 @@ func (r *Reference) PullRequest(ctx context.Context, spec *github.NewPullRequest
 	}
 
 	specCopy := *spec
-	specCopy.Head = github.String(strings.TrimPrefix(r.ref, "refs/heads/"))
+	specCopy.Head = github.Ptr(strings.TrimPrefix(r.ref, "refs/heads/"))
 
 	pr, _, err := r.client.PullRequests.Create(ctx, r.owner, r.repo, &specCopy)
 	if err != nil {

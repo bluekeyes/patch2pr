@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
@@ -77,7 +76,7 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 	if entry.Content != nil {
 		blob, _, err := a.client.Git.CreateBlob(ctx, a.owner, a.repo, github.Blob{
 			Content:  entry.Content,
-			Encoding: github.String("base64"),
+			Encoding: github.Ptr("base64"),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create blob failed: %w", err)
@@ -106,8 +105,8 @@ func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.Tre
 	path := f.NewName
 	newEntry := &github.TreeEntry{
 		Path:    &path,
-		Mode:    github.String(getMode(f, nil)),
-		Type:    github.String("blob"),
+		Mode:    github.Ptr(getMode(f, nil)),
+		Type:    github.Ptr("blob"),
 		Content: &c,
 	}
 	a.entries[path] = newEntry
@@ -131,7 +130,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, fmt.Errorf("get blob content failed: %w", err)
 	}
 
-	if err := apply(ioutil.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
+	if err := apply(io.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
 		return nil, err
 	}
 
@@ -157,8 +156,8 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 	path := f.NewName
 	newEntry := &github.TreeEntry{
 		Path: &path,
-		Mode: github.String(getMode(f, entry)),
-		Type: github.String("blob"),
+		Mode: github.Ptr(getMode(f, entry)),
+		Type: github.Ptr("blob"),
 	}
 
 	if len(f.TextFragments) > 0 || f.BinaryFragment != nil {
@@ -251,19 +250,19 @@ func (a *Applier) Commit(ctx context.Context, tmpl *github.Commit, header *gitdi
 	}
 
 	c.Tree = &github.Tree{
-		SHA: github.String(a.tree),
+		SHA: github.Ptr(a.tree),
 	}
 	c.Parents = []*github.Commit{
 		a.commit,
 	}
 
 	if header != nil {
-		c.Message = github.String(header.Message())
+		c.Message = github.Ptr(header.Message())
 		c.Author = makeCommitAuthor(header.Author, header.AuthorDate)
 		c.Committer = makeCommitAuthor(header.Committer, header.CommitterDate)
 	}
 	if c.Message == nil || *c.Message == "" {
-		c.Message = github.String("Apply patch with patch2pr")
+		c.Message = github.Ptr("Apply patch with patch2pr")
 	}
 
 	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, c, nil)
@@ -400,10 +399,10 @@ func makeCommitAuthor(id *gitdiff.PatchIdentity, d time.Time) *github.CommitAuth
 	a := &github.CommitAuthor{}
 	if id != nil {
 		if id.Name != "" {
-			a.Name = github.String(id.Name)
+			a.Name = github.Ptr(id.Name)
 		}
 		if id.Email != "" {
-			a.Email = github.String(id.Email)
+			a.Email = github.Ptr(id.Email)
 		}
 	}
 	if !d.IsZero() {

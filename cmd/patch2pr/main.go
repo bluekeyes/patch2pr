@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
@@ -63,7 +62,7 @@ func main() {
 	var opts Options
 
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	fs.SetOutput(ioutil.Discard)
+	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 
 	fs.StringVar(&opts.BaseBranch, "base-branch", "", "base-branch")
@@ -299,7 +298,7 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 		if sourceRepo == targetRepo {
 			prSpec.Head = &headBranch
 		} else {
-			prSpec.Head = github.String(fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch))
+			prSpec.Head = github.Ptr(fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch))
 			prSpec.HeadRepo = &sourceRepo.Name
 		}
 

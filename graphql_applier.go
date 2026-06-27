@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 
@@ -148,7 +148,7 @@ func (a *GraphQLApplier) applyDelete(ctx context.Context, f *gitdiff.File) error
 		return &Conflict{Type: ConflictDeletedFileMissing, File: f.OldName}
 	}
 
-	if err := apply(ioutil.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
+	if err := apply(io.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
 		return err
 	}
 
