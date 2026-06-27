@@ -360,7 +360,7 @@ func base64Apply(data []byte, name string, f *gitdiff.File) (string, error) {
 	return b.String(), nil
 }
 
-// apply runs gitdiff.Apply, wrapping any conflicts  in patch2pr's Conflict type.
+// apply runs gitdiff.Apply, wrapping any conflicts in patch2pr's Conflict type.
 func apply(dst io.Writer, src io.ReaderAt, name string, f *gitdiff.File) error {
 	if err := gitdiff.Apply(dst, src, f); err != nil {
 		var applyErr *gitdiff.ApplyError
