@@ -278,14 +278,14 @@ func createBranch(t *testing.T, tctx *TestContext) {
 		treePath := strings.TrimPrefix(path, root)
 		entry := github.TreeEntry{
 			Path: &treePath,
-			Type: github.String("blob"),
-			Mode: github.String(getGitMode(info)),
+			Type: github.Ptr("blob"),
+			Mode: github.Ptr(getGitMode(info)),
 		}
 
 		if strings.HasSuffix(d.Name(), ".bin") {
 			c := base64.StdEncoding.EncodeToString(content)
 			blob, _, err := tctx.Client.Git.CreateBlob(tctx, tctx.Repo.Owner, tctx.Repo.Name, github.Blob{
-				Encoding: github.String("base64"),
+				Encoding: github.Ptr("base64"),
 				Content:  &c,
 			})
 			if err != nil {
@@ -314,7 +314,7 @@ func createBranch(t *testing.T, tctx *TestContext) {
 	}
 
 	commitToCreate := github.Commit{
-		Message: github.String("Base commit for test"),
+		Message: github.Ptr("Base commit for test"),
 		Tree:    tree,
 	}
 
