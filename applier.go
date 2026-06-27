@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -48,6 +49,8 @@ func NewApplier(client *github.Client, repo Repository, c *github.Commit) *Appli
 // Apply applies the changes in a file, adds the result to the list of pending
 // tree entries, and returns the entry. If the application succeeds, Apply
 // creates a blob in the repository with the modified content.
+//
+// If the apply fails due to a conflict, Apply returns an error of type *Conflict.
 func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	// TODO(bkeyes): validate file to make sure fields are consistent
 	// maybe two modes: validate and fix, where fix tries to set
@@ -91,10 +94,10 @@ func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, err
 	}
 	if exists {
-		return nil, errors.New("existing entry for new file")
+		return nil, &Conflict{Type: ConflictNewFileExists, File: f.NewName}
 	}
 
-	c, err := base64Apply(nil, f)
+	c, err := base64Apply(nil, f.NewName, f)
 	if err != nil {
 		return nil, err
 	}
@@ -117,9 +120,9 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, err
 	}
 	if !exists {
-		// because the rest of application is strict, return an error if the
+		// Because the rest of application is strict, return an error if the
 		// file was already deleted, since it indicates a conflict of some kind
-		return nil, errors.New("missing entry for deleted file")
+		return nil, &Conflict{Type: ConflictDeletedFileMissing, File: f.OldName}
 	}
 
 	data, _, err := a.client.Git.GetBlobRaw(ctx, a.owner, a.repo, entry.GetSHA())
@@ -127,7 +130,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, fmt.Errorf("get blob content failed: %w", err)
 	}
 
-	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
+	if err := apply(ioutil.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
 		return nil, err
 	}
 
@@ -147,7 +150,7 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, err
 	}
 	if !exists {
-		return nil, errors.New("no entry for modified file")
+		return nil, &Conflict{Type: ConflictModifiedFileMissing, File: f.OldName}
 	}
 
 	path := f.NewName
@@ -163,7 +166,7 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 			return nil, fmt.Errorf("get blob content failed: %w", err)
 		}
 
-		c, err := base64Apply(data, f)
+		c, err := base64Apply(data, f.OldName, f)
 		if err != nil {
 			return nil, err
 		}
@@ -341,11 +344,13 @@ func findTreeEntry(t *github.Tree, name, entryType string) (*github.TreeEntry, b
 	return nil, false
 }
 
-func base64Apply(data []byte, f *gitdiff.File) (string, error) {
+// base64Apply applies the patch in f to data and returns the result as a
+// base64-encoded string.
+func base64Apply(data []byte, name string, f *gitdiff.File) (string, error) {
 	var b bytes.Buffer
 
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	if err := gitdiff.Apply(enc, bytes.NewReader(data), f); err != nil {
+	if err := apply(enc, bytes.NewReader(data), name, f); err != nil {
 		return "", err
 	}
 	if err := enc.Close(); err != nil {
@@ -353,6 +358,24 @@ func base64Apply(data []byte, f *gitdiff.File) (string, error) {
 	}
 
 	return b.String(), nil
+}
+
+// apply runs gitdiff.Apply, wrapping any conflicts  in patch2pr's Conflict type.
+func apply(dst io.Writer, src io.ReaderAt, name string, f *gitdiff.File) error {
+	if err := gitdiff.Apply(dst, src, f); err != nil {
+		var applyErr *gitdiff.ApplyError
+		var conflict *gitdiff.Conflict
+		if errors.As(err, &applyErr) && errors.As(err, &conflict) {
+			return &Conflict{
+				Type:  ConflictContent,
+				File:  name,
+				Line:  applyErr.Line,
+				cause: conflict,
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 // TODO(bkeyes): extract this to go-gitdiff in some form?
