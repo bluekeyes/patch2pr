@@ -50,7 +50,8 @@ func NewApplier(client *github.Client, repo Repository, c *github.Commit) *Appli
 // tree entries, and returns the entry. If the application succeeds, Apply
 // creates a blob in the repository with the modified content.
 //
-// If the apply fails due to a conflict, Apply returns an error of type *Conflict.
+// If the apply fails due to a conflict, Apply returns an error of type
+// *Conflict.
 func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry, error) {
 	// TODO(bkeyes): validate file to make sure fields are consistent
 	// maybe two modes: validate and fix, where fix tries to set
