@@ -249,11 +249,15 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 	for _, patch := range allPatches {
 		for _, file := range patch.files {
 			if _, err := applier.Apply(ctx, file); err != nil {
-				name := file.NewName
-				if name == "" {
-					name = file.OldName
+				var namePart string
+				if !errors.Is(err, &patch2pr.Conflict{}) {
+					name := file.NewName
+					if name == "" {
+						name = file.OldName
+					}
+					namePart = name + ": "
 				}
-				return nil, fmt.Errorf("apply failed: %s: %w", name, err)
+				return nil, fmt.Errorf("apply failed: %s%w", namePart, err)
 			}
 		}
 

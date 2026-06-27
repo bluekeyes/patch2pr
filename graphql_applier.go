@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -81,6 +80,9 @@ func (a *GraphQLApplier) SetV3Client(client *github.Client) {
 // When given an unsupported patch, Apply returns an error such that
 // IsUnsupported(err) is true. Setting a V3 client with SetV3Client allows
 // Apply to process some patches that are otherwise unsupported.
+//
+// If the apply fails due to a conflict, Apply returns an error of type
+// *Conflict.
 func (a *GraphQLApplier) Apply(ctx context.Context, f *gitdiff.File) error {
 	// As of 2021-09-22, createCommitOnBranch handles file modes
 	// inconsistently:
@@ -122,11 +124,11 @@ func (a *GraphQLApplier) applyCreate(ctx context.Context, f *gitdiff.File) error
 		return err
 	}
 	if exists {
-		return errors.New("existing entry for new file")
+		return &Conflict{Type: ConflictNewFileExists, File: f.NewName}
 	}
 
 	var b bytes.Buffer
-	if err := gitdiff.Apply(&b, bytes.NewReader(nil), f); err != nil {
+	if err := apply(&b, bytes.NewReader(nil), f.NewName, f); err != nil {
 		return err
 	}
 
@@ -141,12 +143,12 @@ func (a *GraphQLApplier) applyDelete(ctx context.Context, f *gitdiff.File) error
 		return err
 	}
 	if !exists {
-		// because the rest of application is strict, return an error if the
+		// Because the rest of application is strict, return an error if the
 		// file was already deleted, since it indicates a conflict of some kind
-		return errors.New("missing entry for deleted file")
+		return &Conflict{Type: ConflictDeletedFileMissing, File: f.OldName}
 	}
 
-	if err := gitdiff.Apply(ioutil.Discard, bytes.NewReader(data), f); err != nil {
+	if err := apply(ioutil.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
 		return err
 	}
 
@@ -160,12 +162,12 @@ func (a *GraphQLApplier) applyModify(ctx context.Context, f *gitdiff.File) error
 		return err
 	}
 	if !exists {
-		return errors.New("no entry for modified file")
+		return &Conflict{Type: ConflictModifiedFileMissing, File: f.OldName}
 	}
 
 	if len(f.TextFragments) > 0 || f.BinaryFragment != nil {
 		var b bytes.Buffer
-		if err := gitdiff.Apply(&b, bytes.NewReader(data), f); err != nil {
+		if err := apply(&b, bytes.NewReader(data), f.OldName, f); err != nil {
 			return err
 		}
 		data = b.Bytes()
