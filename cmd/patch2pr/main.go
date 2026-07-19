@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v88/github"
+	"github.com/google/go-github/v89/github"
 
 	"github.com/bluekeyes/patch2pr"
 	"github.com/bluekeyes/patch2pr/internal"
