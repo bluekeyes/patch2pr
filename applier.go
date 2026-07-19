@@ -31,6 +31,8 @@ type Applier struct {
 	treeCache   map[string]*github.Tree
 	entries     map[string]*github.TreeEntry
 	uncommitted bool
+
+	applyOptions []gitdiff.ApplyOption
 }
 
 // NewApplier creates a new Applier for a repository. The Applier applies
@@ -43,6 +45,12 @@ func NewApplier(client *github.Client, repo Repository, c *github.Commit) *Appli
 	}
 	a.Reset(c)
 	return a
+}
+
+// SetApplyOptions sets the options to use when calling [gitdiff.Apply]. Pass
+// an empty list to remove previously set options.
+func (a *Applier) SetApplyOptions(opts ...gitdiff.ApplyOption) {
+	a.applyOptions = opts
 }
 
 // Apply applies the changes in a file, adds the result to the list of pending
@@ -97,7 +105,7 @@ func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, &Conflict{Type: ConflictNewFileExists, File: f.NewName}
 	}
 
-	c, err := base64Apply(nil, f.NewName, f)
+	c, err := base64Apply(nil, f.NewName, f, a.applyOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +138,7 @@ func (a *Applier) applyDelete(ctx context.Context, f *gitdiff.File) (*github.Tre
 		return nil, fmt.Errorf("get blob content failed: %w", err)
 	}
 
-	if err := apply(io.Discard, bytes.NewReader(data), f.OldName, f); err != nil {
+	if err := apply(io.Discard, bytes.NewReader(data), f.OldName, f, a.applyOptions...); err != nil {
 		return nil, err
 	}
 
@@ -166,7 +174,7 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 			return nil, fmt.Errorf("get blob content failed: %w", err)
 		}
 
-		c, err := base64Apply(data, f.OldName, f)
+		c, err := base64Apply(data, f.OldName, f, a.applyOptions...)
 		if err != nil {
 			return nil, err
 		}
@@ -346,11 +354,11 @@ func findTreeEntry(t *github.Tree, name, entryType string) (*github.TreeEntry, b
 
 // base64Apply applies the patch in f to data and returns the result as a
 // base64-encoded string.
-func base64Apply(data []byte, name string, f *gitdiff.File) (string, error) {
+func base64Apply(data []byte, name string, f *gitdiff.File, opts ...gitdiff.ApplyOption) (string, error) {
 	var b bytes.Buffer
 
 	enc := base64.NewEncoder(base64.StdEncoding, &b)
-	if err := apply(enc, bytes.NewReader(data), name, f); err != nil {
+	if err := apply(enc, bytes.NewReader(data), name, f, opts...); err != nil {
 		return "", err
 	}
 	if err := enc.Close(); err != nil {
@@ -361,8 +369,8 @@ func base64Apply(data []byte, name string, f *gitdiff.File) (string, error) {
 }
 
 // apply runs gitdiff.Apply, wrapping any conflicts in patch2pr's Conflict type.
-func apply(dst io.Writer, src io.ReaderAt, name string, f *gitdiff.File) error {
-	if err := gitdiff.Apply(dst, src, f); err != nil {
+func apply(dst io.Writer, src io.ReaderAt, name string, f *gitdiff.File, opts ...gitdiff.ApplyOption) error {
+	if err := gitdiff.Apply(dst, src, f, opts...); err != nil {
 		var applyErr *gitdiff.ApplyError
 		var conflict *gitdiff.Conflict
 		if errors.As(err, &applyErr) && errors.As(err, &conflict) {
