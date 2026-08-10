@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 
 	"github.com/bluekeyes/patch2pr"
 	"github.com/bluekeyes/patch2pr/internal"
@@ -288,17 +288,17 @@ func execute(ctx context.Context, client *github.Client, patchFiles []string, op
 			body = opts.PullBody
 		}
 
-		prSpec := &github.NewPullRequest{
+		prSpec := github.CreatePullRequest{
 			Title: &title,
 			Body:  &body,
-			Base:  &baseBranch,
+			Base:  baseBranch,
 			Draft: &opts.Draft,
 		}
 
 		if sourceRepo == targetRepo {
-			prSpec.Head = &headBranch
+			prSpec.Head = headBranch
 		} else {
-			prSpec.Head = github.Ptr(fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch))
+			prSpec.Head = fmt.Sprintf("%s:%s", sourceRepo.Owner, headBranch)
 			prSpec.HeadRepo = &sourceRepo.Name
 		}
 

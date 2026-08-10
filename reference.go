@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/go-github/v89/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // Reference is a named reference in a repository.
@@ -69,15 +69,14 @@ func (r *Reference) Set(ctx context.Context, sha string, force bool) error {
 // PullRequest create a new pull request for the reference. The reference must
 // be a branch (start with "refs/heads/".) The pull request takes values from
 // spec, except for Head, which is set to the reference.
-func (r *Reference) PullRequest(ctx context.Context, spec *github.NewPullRequest) (*github.PullRequest, error) {
+func (r *Reference) PullRequest(ctx context.Context, spec github.CreatePullRequest) (*github.PullRequest, error) {
 	if !strings.HasPrefix(r.ref, "refs/heads/") {
 		return nil, fmt.Errorf("reference %s is not a branch", r.ref)
 	}
 
-	specCopy := *spec
-	specCopy.Head = github.Ptr(strings.TrimPrefix(r.ref, "refs/heads/"))
+	spec.Head = strings.TrimPrefix(r.ref, "refs/heads/")
 
-	pr, _, err := r.client.PullRequests.Create(ctx, r.owner, r.repo, &specCopy)
+	pr, _, err := r.client.PullRequests.Create(ctx, r.owner, r.repo, spec)
 	if err != nil {
 		return nil, err
 	}
