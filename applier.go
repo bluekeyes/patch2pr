@@ -84,7 +84,7 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 	if entry.Content != nil {
 		blob, _, err := a.client.Git.CreateBlob(ctx, a.owner, a.repo, github.Blob{
 			Content:  entry.Content,
-			Encoding: github.Ptr("base64"),
+			Encoding: new("base64"),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("create blob failed: %w", err)
@@ -113,8 +113,8 @@ func (a *Applier) applyCreate(ctx context.Context, f *gitdiff.File) (*github.Tre
 	path := f.NewName
 	newEntry := &github.TreeEntry{
 		Path:    &path,
-		Mode:    github.Ptr(getMode(f, nil)),
-		Type:    github.Ptr("blob"),
+		Mode:    new(getMode(f, nil)),
+		Type:    new("blob"),
 		Content: &c,
 	}
 	a.entries[path] = newEntry
@@ -164,8 +164,8 @@ func (a *Applier) applyModify(ctx context.Context, f *gitdiff.File) (*github.Tre
 	path := f.NewName
 	newEntry := &github.TreeEntry{
 		Path: &path,
-		Mode: github.Ptr(getMode(f, entry)),
-		Type: github.Ptr("blob"),
+		Mode: new(getMode(f, entry)),
+		Type: new("blob"),
 	}
 
 	if len(f.TextFragments) > 0 || f.BinaryFragment != nil {
@@ -258,19 +258,19 @@ func (a *Applier) Commit(ctx context.Context, tmpl *github.Commit, header *gitdi
 	}
 
 	c.Tree = &github.Tree{
-		SHA: github.Ptr(a.tree),
+		SHA: new(a.tree),
 	}
 	c.Parents = []*github.Commit{
 		a.commit,
 	}
 
 	if header != nil {
-		c.Message = github.Ptr(header.Message())
+		c.Message = new(header.Message())
 		c.Author = makeCommitAuthor(header.Author, header.AuthorDate)
 		c.Committer = makeCommitAuthor(header.Committer, header.CommitterDate)
 	}
 	if c.Message == nil || *c.Message == "" {
-		c.Message = github.Ptr("Apply patch with patch2pr")
+		c.Message = new("Apply patch with patch2pr")
 	}
 
 	commit, _, err := a.client.Git.CreateCommit(ctx, a.owner, a.repo, c, nil)
@@ -407,10 +407,10 @@ func makeCommitAuthor(id *gitdiff.PatchIdentity, d time.Time) *github.CommitAuth
 	a := &github.CommitAuthor{}
 	if id != nil {
 		if id.Name != "" {
-			a.Name = github.Ptr(id.Name)
+			a.Name = new(id.Name)
 		}
 		if id.Email != "" {
-			a.Email = github.Ptr(id.Email)
+			a.Email = new(id.Email)
 		}
 	}
 	if !d.IsZero() {
