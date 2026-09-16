@@ -50,7 +50,7 @@ func (r *Reference) Set(ctx context.Context, sha string, force bool) error {
 	if exists {
 		if _, _, err := r.client.Git.UpdateRef(ctx, r.owner, r.repo, r.ref, github.UpdateRef{
 			SHA:   sha,
-			Force: github.Ptr(force),
+			Force: new(force),
 		}); err != nil {
 			return fmt.Errorf("update ref failed: %w", err)
 		}
