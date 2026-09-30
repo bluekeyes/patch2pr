@@ -53,6 +53,35 @@ func TestApplier(t *testing.T) {
 	}
 }
 
+func TestApplierSupportsEmptyCommits(t *testing.T) {
+	tctx := prepareTestContext(t)
+
+	t.Logf("Test ID: %s", tctx.ID)
+	t.Logf("Test Repository: %s", tctx.Repo.String())
+
+	createBranch(t, tctx)
+	defer cleanupBranches(t, tctx)
+
+	applier := NewApplier(tctx.Client, tctx.Repo, tctx.BaseCommit)
+	applier.SetAllowEmptyCommits(true)
+
+	commit, err := applier.Commit(tctx, nil, &gitdiff.PatchHeader{Title: "empty"})
+	if err != nil {
+		t.Fatalf("error committing changes form empty patch: %v", err)
+	}
+	// calling "Commit" on the applier without making any calls to "Apply" to apply patches should create a new empty
+	// commit. The returned commit should be different from the base commit, its tree should be the same.
+	if commit.GetSHA() == tctx.BaseCommit.GetSHA() {
+		t.Errorf("empty commit has same SHA as base commit: %s", commit.GetSHA())
+	}
+	if len(commit.Parents) != 1 || commit.Parents[0].GetSHA() != tctx.BaseCommit.GetSHA() {
+		t.Errorf("empty commit does not have base commit as its parent: %v", commit.Parents)
+	}
+	if commit.GetTree().GetSHA() != tctx.BaseTree.GetSHA() {
+		t.Errorf("empty commit changed tree: expected %s, actual %s", tctx.BaseTree.GetSHA(), commit.GetTree().GetSHA())
+	}
+}
+
 type TestContext struct {
 	context.Context
 
