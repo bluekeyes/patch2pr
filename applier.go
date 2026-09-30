@@ -32,7 +32,8 @@ type Applier struct {
 	entries     map[string]*github.TreeEntry
 	uncommitted bool
 
-	applyOptions []gitdiff.ApplyOption
+	applyOptions      []gitdiff.ApplyOption
+	allowEmptyCommits bool
 }
 
 // NewApplier creates a new Applier for a repository. The Applier applies
@@ -51,6 +52,13 @@ func NewApplier(client *github.Client, repo Repository, c *github.Commit) *Appli
 // an empty list to remove previously set options.
 func (a *Applier) SetApplyOptions(opts ...gitdiff.ApplyOption) {
 	a.applyOptions = opts
+}
+
+// SetAllowEmptyCommits controls whether Commit may create a commit without
+// pending changes. Empty commits reuse the current tree. The default is false.
+// This setting is preserved across calls to Commit and Reset.
+func (a *Applier) SetAllowEmptyCommits(allow bool) {
+	a.allowEmptyCommits = allow
 }
 
 // Apply applies the changes in a file, adds the result to the list of pending
@@ -231,8 +239,8 @@ func (a *Applier) CreateTree(ctx context.Context) (*github.Tree, error) {
 
 // Commit commits the latest tree, optionally using the details in tmpl and
 // header. If there are pending tree entries, it calls CreateTree before
-// creating the commit. It returns an error if there are no pending trees or
-// tree entries.
+// creating the commit. If there are no pending trees or tree entries, it returns
+// an error unless empty commits are enabled with [Applier.SetAllowEmptyCommits].
 //
 // If tmpl is not nil, Commit uses it as a template for the new commit,
 // overwriting fields as needed. If header is not nil, Commit uses it to set
@@ -243,7 +251,7 @@ func (a *Applier) CreateTree(ctx context.Context) (*github.Tree, error) {
 // message, the current time, and the authenticated user as needed for the
 // commit details.
 func (a *Applier) Commit(ctx context.Context, tmpl *github.Commit, header *gitdiff.PatchHeader) (*github.Commit, error) {
-	if !a.uncommitted && len(a.entries) == 0 {
+	if !a.allowEmptyCommits && !a.uncommitted && len(a.entries) == 0 {
 		return nil, errors.New("no pending tree or tree entries")
 	}
 	if len(a.entries) > 0 {
