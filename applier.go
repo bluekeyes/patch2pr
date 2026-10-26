@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v92/github"
+	"github.com/google/go-github/v93/github"
 )
 
 // DefaultCommitMessage is the commit message used when no message is provided
@@ -91,7 +91,7 @@ func (a *Applier) Apply(ctx context.Context, f *gitdiff.File) (*github.TreeEntry
 
 	if entry.Content != nil {
 		blob, _, err := a.client.Git.CreateBlob(ctx, a.owner, a.repo, github.Blob{
-			Content:  entry.Content,
+			Content:  entry.GetContent(),
 			Encoding: new("base64"),
 		})
 		if err != nil {

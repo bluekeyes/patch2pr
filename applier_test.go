@@ -15,7 +15,7 @@ import (
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/bluekeyes/patch2pr/internal"
-	"github.com/google/go-github/v92/github"
+	"github.com/google/go-github/v93/github"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -315,7 +315,7 @@ func createBranch(t *testing.T, tctx *TestContext) {
 			c := base64.StdEncoding.EncodeToString(content)
 			blob, _, err := tctx.Client.Git.CreateBlob(tctx, tctx.Repo.Owner, tctx.Repo.Name, github.Blob{
 				Encoding: new("base64"),
-				Content:  &c,
+				Content:  c,
 			})
 			if err != nil {
 				return err

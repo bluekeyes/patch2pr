@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/google/go-github/v92/github"
+	"github.com/google/go-github/v93/github"
 
 	"github.com/bluekeyes/patch2pr"
 	"github.com/bluekeyes/patch2pr/internal"
@@ -370,15 +370,15 @@ func createFork(ctx context.Context, client *github.Client, fork, parent patch2p
 		maxWait   = 5 * time.Minute
 	)
 
-	organization := fork.Owner
+	organization := &fork.Owner
 	if isUserFork {
-		organization = ""
+		organization = nil
 	}
 
-	repo, _, err := client.Repositories.CreateFork(ctx, parent.Owner, parent.Name, &github.RepositoryCreateForkOptions{
+	repo, _, err := client.Repositories.CreateFork(ctx, parent.Owner, parent.Name, github.CreateForkRequest{
 		Organization:      organization,
-		Name:              fork.Name,
-		DefaultBranchOnly: true,
+		Name:              new(fork.Name),
+		DefaultBranchOnly: new(true),
 	})
 
 	var aerr *github.AcceptedError
